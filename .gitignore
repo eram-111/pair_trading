@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
+
+# results are regenerable; only the frozen finals are committed
+results/*
+!results/final/
+!results/figures/
+results/figures/*
+!results/figures/final/

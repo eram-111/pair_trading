@@ -1,0 +1,293 @@
+<title>Pairs Trading — The 4-Day Build</title>
+<style>
+  :root {
+    --paper: #FAFBF9;
+    --ink: #1A2421;
+    --muted: #5C6862;
+    --line: #E3E8E2;
+    --chip-bg: #EEF2ED;
+    --p1: #0F766E;
+    --p2: #B0620F;
+    --p3: #5152B8;
+    --p1-bg: #0F766E14;
+    --p2-bg: #B0620F14;
+    --p3-bg: #5152B814;
+    --gate: #8A1E1E;
+    --gate-bg: #8A1E1E10;
+    --mono: "SF Mono", "Cascadia Code", ui-monospace, Menlo, Consolas, monospace;
+    --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #141816;
+      --ink: #E8ECE8;
+      --muted: #93A099;
+      --line: #2A302C;
+      --chip-bg: #1E2420;
+      --p1: #3ECFAF;
+      --p2: #E8A04C;
+      --p3: #9B9BEF;
+      --p1-bg: #3ECFAF16;
+      --p2-bg: #E8A04C16;
+      --p3-bg: #9B9BEF16;
+      --gate: #E77A7A;
+      --gate-bg: #E77A7A14;
+    }
+  }
+  :root[data-theme="light"] {
+    --paper: #FAFBF9; --ink: #1A2421; --muted: #5C6862; --line: #E3E8E2; --chip-bg: #EEF2ED;
+    --p1: #0F766E; --p2: #B0620F; --p3: #5152B8;
+    --p1-bg: #0F766E14; --p2-bg: #B0620F14; --p3-bg: #5152B814;
+    --gate: #8A1E1E; --gate-bg: #8A1E1E10;
+  }
+  :root[data-theme="dark"] {
+    --paper: #141816; --ink: #E8ECE8; --muted: #93A099; --line: #2A302C; --chip-bg: #1E2420;
+    --p1: #3ECFAF; --p2: #E8A04C; --p3: #9B9BEF;
+    --p1-bg: #3ECFAF16; --p2-bg: #E8A04C16; --p3-bg: #9B9BEF16;
+    --gate: #E77A7A; --gate-bg: #E77A7A14;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: var(--body); line-height: 1.55; font-size: 16px;
+    margin: 0; padding: 48px 20px 80px;
+  }
+  main { max-width: 880px; margin: 0 auto; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 10px;
+  }
+  h1 {
+    font-size: clamp(30px, 5vw, 42px); line-height: 1.1; margin: 0 0 14px;
+    letter-spacing: -0.02em; text-wrap: balance; font-weight: 750;
+  }
+  .lede { font-size: 18px; max-width: 62ch; margin: 0 0 8px; }
+  .lede strong { font-weight: 650; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 18px 0 0;
+    font-family: var(--mono); font-size: 12.5px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  h2 {
+    font-size: 21px; margin: 0 0 4px; letter-spacing: -0.01em; font-weight: 700;
+    text-wrap: balance;
+  }
+  .kicker { color: var(--muted); margin: 0 0 20px; max-width: 62ch; }
+  section { margin-top: 56px; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 48px 0 0; }
+
+  /* person tags */
+  .tag {
+    font-family: var(--mono); font-size: 11.5px; font-weight: 700;
+    padding: 1px 7px 2px; border-radius: 4px; white-space: nowrap;
+  }
+  .t1 { color: var(--p1); background: var(--p1-bg); }
+  .t2 { color: var(--p2); background: var(--p2-bg); }
+  .t3 { color: var(--p3); background: var(--p3-bg); }
+
+  /* slice diagram */
+  .slices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .slice { border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px 16px; }
+  .slice h3 { margin: 6px 0 2px; font-size: 16px; }
+  .slice .who { font-size: 13.5px; color: var(--muted); margin: 0 0 12px; }
+  .slice dl { margin: 0; display: grid; gap: 9px; }
+  .slice dt {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .slice dd { margin: 1px 0 0; font-size: 14.5px; }
+  .slice dd .file { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+  .spine {
+    margin-top: 10px; border: 1px dashed var(--line); border-radius: 6px;
+    padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline;
+  }
+  .spine .label {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted); margin-right: 6px;
+  }
+  .spine span.item { font-size: 14px; }
+  .spine .note { width: 100%; font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+  /* timeline */
+  .day { display: grid; grid-template-columns: 108px 1fr; gap: 0 22px; position: relative; padding-bottom: 34px; }
+  .day::before {
+    content: ""; position: absolute; left: 118px; top: 34px; bottom: 6px;
+    width: 1px; background: var(--line);
+  }
+  .day:last-of-type { padding-bottom: 0; }
+  .day:last-of-type::before { display: none; }
+  .daychip { text-align: right; }
+  .daychip .d {
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .daychip .date { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .day h3 { margin: 0 0 3px; font-size: 17.5px; }
+  .day .sub { color: var(--muted); font-size: 14.5px; margin: 0 0 12px; max-width: 60ch; }
+  .lanes { display: grid; gap: 7px; }
+  .lane { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: baseline; font-size: 14.5px; }
+  .lane .txt { max-width: 62ch; }
+  .lane .txt .file { font-family: var(--mono); font-size: 12.5px; }
+  .milestone {
+    margin-top: 14px; display: inline-flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline;
+    background: var(--gate-bg); border: 1px solid transparent; border-radius: 6px;
+    padding: 8px 12px; font-size: 14px; max-width: 60ch;
+  }
+  .milestone .m {
+    font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--gate);
+  }
+  .writeup { border: 1px dashed var(--line); border-radius: 6px; padding: 14px 18px; margin-top: 6px; color: var(--muted); font-size: 14.5px; }
+  .writeup .d { font-family: var(--mono); font-weight: 700; color: var(--ink); font-size: 13px; }
+
+  /* rails */
+  .rails { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .rail { border: 1px solid var(--line); border-radius: 6px; padding: 13px 16px; }
+  .rail h3 { margin: 0 0 4px; font-size: 15px; }
+  .rail p { margin: 0; font-size: 14px; color: var(--muted); }
+
+  footer { margin-top: 48px; font-size: 13.5px; color: var(--muted); }
+  footer .file { font-family: var(--mono); font-size: 12.5px; }
+
+  @media (max-width: 640px) {
+    .slices { grid-template-columns: 1fr; }
+    .rails { grid-template-columns: 1fr; }
+    .day { grid-template-columns: 1fr; gap: 6px; }
+    .day::before { display: none; }
+    .daychip { text-align: left; display: flex; gap: 10px; align-items: baseline; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<main>
+  <header>
+    <p class="eyebrow">CSC311 · Option 2 · Pairs Trading</p>
+    <h1>The 4-Day Build</h1>
+    <p class="lede">Three people, three parallel lanes. Each of us owns <strong>one way of picking stock pairs, one prediction model, and the testing of that model</strong>. The measuring tools — backtester, training-data builder, scoring code — are built <strong>once and shared</strong>, so every method is judged by the same referee. We hand each other <strong>data files with agreed formats</strong>, never half-finished code, so nobody waits on anybody.</p>
+    <div class="meta">
+      <span>Alex · Golam · Jaskaran</span>
+      <span>Build: Sun Aug 2 → Wed Aug 5</span>
+      <span>Write-up: Aug 6–7</span>
+      <span>Due: Fri Aug 7, 23:00 EST</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Three slices, one shared spine</h2>
+    <p class="kicker">The final result is a 12-cell grid: 3 pairing methods × 4 models, every cell scored by identical machinery.</p>
+    <div class="slices">
+      <div class="slice">
+        <span class="tag t1">P1</span>
+        <h3>Substrate</h3>
+        <p class="who">Heaviest math · no Bloomberg needed</p>
+        <dl>
+          <div><dt>Picks pairs by</dt><dd>Price behavior — Track A <span class="file">(PCA → residuals → clustering)</span></dd></div>
+          <div><dt>Trains</dt><dd>E2 · Gaussian discriminant</dd></div>
+          <div><dt>Builds for everyone</dt><dd>Data download + all the market-math machinery <span class="file">data.py · representation.py</span></dd></div>
+        </dl>
+      </div>
+      <div class="slice">
+        <span class="tag t2">P2</span>
+        <h3>Training data</h3>
+        <p class="who">Needs Bloomberg terminal access</p>
+        <dl>
+          <div><dt>Picks pairs by</dt><dd>Company fundamentals — Track B <span class="file">(characteristics.py)</span></dd></div>
+          <div><dt>Trains</dt><dd>E1 · logistic — the primary model</dd></div>
+          <div><dt>Builds for everyone</dt><dd>The dataset builder: gap events → labels → 7 features <span class="file">dataset.py</span></dd></div>
+        </dl>
+      </div>
+      <div class="slice">
+        <span class="tag t3">P3</span>
+        <h3>Evaluator</h3>
+        <p class="who">Strongest PyTorch person</p>
+        <dl>
+          <div><dt>Picks pairs by</dt><dd>Partial correlation — Track C <span class="file">(partial_corr.py)</span></dd></div>
+          <div><dt>Trains</dt><dd>E3 · small neural net, plus the E0 baseline</dd></div>
+          <div><dt>Builds for everyone</dt><dd>Backtester, experiment runner, scoring <span class="file">engine.py · experiments.py · metrics.py</span></dd></div>
+        </dl>
+      </div>
+    </div>
+    <div class="spine">
+      <span class="label">Shared, built once</span>
+      <span class="item">one backtest engine · one dataset builder · one metrics module —</span>
+      <span class="note">this is what makes the comparison fair, and why the turnover-control experiment (our headline result) is valid. Every file has exactly one owner; files with different owners never merge.</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>The timeline</h2>
+    <p class="kicker">Two quick syncs a day: 15 min at midday, 30 min at 9pm. Plan is ~8–9 focused hours per person per day.</p>
+
+    <div class="day">
+      <div class="daychip"><div class="d">DAY 1</div><div class="date">Sun Aug 2</div></div>
+      <div>
+        <h3>Build your tools on fake data</h3>
+        <p class="sub">One-hour kickoff: lock the config, confirm availability, repo pre-created. Then all three lanes go full speed — none of them needs the others yet.</p>
+        <div class="lanes">
+          <div class="lane"><span class="tag t1">P1</span><span class="txt">Downloads the real prices, gets returns out, and has the rolling market-math (PCA) running on them by tonight.</span></div>
+          <div class="lane"><span class="tag t2">P2</span><span class="txt">Creates a small fake dataset with hand-computed answers; writes the gap-detection + labeling code until it reproduces those answers exactly.</span></div>
+          <div class="lane"><span class="tag t3">P3</span><span class="txt">Builds the backtester and proves it against three hand-calculated trades; commits the schemas everyone codes against.</span></div>
+        </div>
+        <div class="milestone"><span class="m">Tonight</span><span>Real prices in · everyone's core tool passing its tests · Bloomberg go/no-go decided for tomorrow morning.</span></div>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="daychip"><div class="d">DAY 2</div><div class="date">Mon Aug 3</div></div>
+      <div>
+        <h3>Each lane produces its pair list</h3>
+        <div class="lanes">
+          <div class="lane"><span class="tag t1">P1</span><span class="txt">Finishes market-neutral residuals, runs the sanity checks (our "market factor" must track SPY), and produces <span class="file">pairs_a</span> + z-scores by tonight.</span></div>
+          <div class="lane"><span class="tag t2">P2</span><span class="txt">Bloomberg session in the morning (code was finished yesterday against a stand-in — today is just a data swap) → <span class="file">pairs_b</span> by tonight.</span></div>
+          <div class="lane"><span class="tag t3">P3</span><span class="txt">Finishes the experiment runner, the model interface, and the scoring code — everything round-trips on fixtures.</span></div>
+        </div>
+        <div class="milestone"><span class="m">Tonight</span><span>Two real pair lists exist · all shared machinery is ready for tomorrow.</span></div>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="daychip"><div class="d">DAY 3</div><div class="date">Tue Aug 4</div></div>
+      <div>
+        <h3>Everything meets — the big day</h3>
+        <p class="sub">Morning: first real training datasets; P3 builds Track C's pairs. Midday check-in: is the data sane? Afternoon: everyone trains their own model, and the full 12-cell grid runs on train + validation.</p>
+        <div class="lanes">
+          <div class="lane"><span class="tag t1">P1</span><span class="txt">Trains E2 · hand-verifies three of P3's backtest trades on paper — a non-author checks the engine.</span></div>
+          <div class="lane"><span class="tag t2">P2</span><span class="txt">Runs real data through the dataset builder → <span class="file">triggers_a/b/c</span> · trains E1 · base-rate review at the midday check.</span></div>
+          <div class="lane"><span class="tag t3">P3</span><span class="txt">Builds Track C in the morning · trains E3 · runs the whole pipeline on pure random noise — it must find nothing.</span></div>
+        </div>
+        <div class="milestone"><span class="m">Gate · 9pm</span><span>All 12 cells green on validation, noise test passed, manual trace 3/3 — or tomorrow morning burns down the reds using the cut list.</span></div>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="daychip"><div class="d">DAY 4</div><div class="date">Wed Aug 5</div></div>
+      <div>
+        <h3>The one real test, then freeze</h3>
+        <p class="sub">Morning: fix anything red, then every model is frozen to disk and checksummed — no more tuning, ever.</p>
+        <div class="lanes">
+          <div class="lane"><span class="tag t1">P1</span><span class="txt">Freezes E2 · finalizes the PCA/stability figures · assembles the leakage checklist for the report.</span></div>
+          <div class="lane"><span class="tag t2">P2</span><span class="txt">Freezes E1 · consensus analysis (do pairs picked by 2–3 methods behave better?) · coefficient tables.</span></div>
+          <div class="lane"><span class="tag t3">P3</span><span class="txt">Runs the cost sweep (at what fee does profit die?) and the turnover controls — is the model smart, or just trading less?</span></div>
+        </div>
+        <div class="milestone"><span class="m">Noon</span><span>The test set is touched for the first and only time — all three watching, through a runner that physically refuses to run twice.</span></div>
+        <div class="milestone"><span class="m">Tonight</span><span>Results frozen with a git tag. Done building.</span></div>
+      </div>
+    </div>
+
+    <div class="writeup"><span class="d">AUG 6–7</span> — the write-up, planned at the Day 4 sync once every number exists. All figures and tables are already generated; what remains is prose. Submit well before Friday 11pm.</div>
+  </section>
+
+  <section>
+    <h2>The safety rails</h2>
+    <div class="rails">
+      <div class="rail"><h3>Nobody waits</h3><p>Fake-data stand-ins with known answers let all three lanes start at full speed on Day 1 — real data slots in when it lands.</p></div>
+      <div class="rail"><h3>Nobody peeks at the future</h3><p>Rolling windows only, labels purged near split boundaries, and the pipeline must find nothing in pure random noise. If a result looks amazing, we treat it as a bug first.</p></div>
+      <div class="rail"><h3>Nobody collides</h3><p>Every file has exactly one owner; hand-offs are data files with frozen formats. Two short syncs a day keep the lanes aligned.</p></div>
+      <div class="rail"><h3>If we fall behind</h3><p>A pre-agreed cut list: Track C drops to validation-only first, then figures. The core comparison — Track A, E1 vs the fixed rule — always survives.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    Full detail — tasks, hours, contracts, risk register — lives in <span class="file">IMPLEMENTATION_PLAN.md</span> in the repo. The grid: 3 pairing methods × 4 models = 12 cells, one referee.
+  </footer>
+</main>

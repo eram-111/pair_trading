@@ -1,0 +1,27 @@
+# environment.yml — commit at repo init; frozen after Day 1 like the config
+name: pair-trading
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      # --- core numerics (Py 3.12) ---
+      - numpy==2.5.1        # current stable; 2.5 line requires Py>=3.12
+      - pandas==3.0.5       # current 3.0.x patch; CoW + str dtype defaults (see 7.2)
+      - pyarrow==25.0.0     # parquet engine for every artifact contract
+      - scipy==1.16.0       # sklearn/statsmodels dep; verify locally that resolver agrees
+      # --- data ---
+      - yfinance==1.5.2     # scraper: pin hard, never float (see 7.1)
+      - curl_cffi==0.13.0   # optional yfinance transport, dodges Yahoo blocking; verify locally
+      # --- ML ---
+      - scikit-learn==1.9.0 # KMeans/LogReg/LDA-QDA/metrics; pulls in narwhals
+      - statsmodels==0.14.6 # report-facing OLS summaries only; verify pandas-3 import
+      # --- plotting / testing ---
+      - matplotlib==3.10.3  # Agg-only usage; newer 3.10.x/3.11.x fine, re-pin — verify locally
+      - pytest==9.1.1       # golden-file + leakage test suite
+
+# torch is NOT in the yml — install it post-create from the CPU wheel index (see 7.5),
+# so pip cannot accidentally resolve the CUDA-bundled PyPI wheel:
+#   conda activate pair-trading
+#   pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu
