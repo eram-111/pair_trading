@@ -3,6 +3,7 @@ __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
 .DS_Store
+*.pdf
 
 # results are regenerable; only the frozen finals are committed
 results/*
