@@ -9,7 +9,6 @@ Plan (who/when/how): `IMPLEMENTATION_PLAN.md`. Visual summary: `PLAN_ONEPAGER.ht
 ```
 conda env create -f environment.yml
 conda activate pair-trading
-pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu
 pytest -q            # must be green before anything else
 ```
 

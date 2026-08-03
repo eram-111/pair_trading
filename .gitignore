@@ -3,6 +3,8 @@ __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
 .DS_Store
+.vscode
+jassi.txt
 *.pdf
 
 # results are regenerable; only the frozen finals are committed
