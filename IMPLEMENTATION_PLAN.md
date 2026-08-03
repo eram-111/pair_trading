@@ -1808,7 +1808,7 @@ def window_betas(F: np.ndarray, R: np.ndarray, ridge: float = 0.0) -> np.ndarray
 
 Verified current: **torch 2.13.0** (2026-07-08). We need CPU wheels only.
 
-- [ ] torch installs **with the env** — `environment.yml` pins `torch==2.13.0+cpu` behind `--extra-index-url https://download.pytorch.org/whl/cpu`. The `+cpu` local-version pin can only be satisfied by the CPU index, so the CUDA-bundled PyPI wheel is unreachable; the install either gets the ~200MB CPU wheel or fails loudly. No separate install step exists. A teammate with an existing CUDA torch (lab machine, other coursework) may keep it — E3 constructs its model and tensors on `config.TORCH_DEVICE = "cpu"`, never `cuda.is_available()` autodetection, so the installed wheel cannot change any number.
+- [ ] torch installs **with the env** — `environment.yml` pins `torch==2.13.0+cpu` behind `--extra-index-url https://download.pytorch.org/whl/cpu`. The `+cpu` local-version pin can only be satisfied by the CPU index, so the CUDA-bundled PyPI wheel is unreachable; the install either gets the ~200MB CPU wheel or fails loudly. No separate install step exists. **macOS caveat:** the `+cpu` tag is Linux-only, so the yml uses platform markers (`sys_platform`); on macOS the plain PyPI wheel is already CPU-only. Note PyTorch dropped **Intel-mac** builds after 2.2.2 — a teammate on an Intel Mac (or an Apple Silicon Mac running an x86_64/Rosetta conda, which reports `osx-64`) cannot install torch 2.13 at all; Apple Silicon needs a *native arm64* conda (e.g. Miniforge arm64). If an Intel Mac is unavoidable, authoritative runs stay on Linux/WSL and that machine gets a documented local torch fallback. **Windows:** the CPU index ships win_amd64 `+cpu` wheels, so Windows shares Linux's pin via the marker (verified 2026-08-03) — important there, since a CUDA-equipped Windows box is the likeliest machine to otherwise pull the CUDA wheel; note the Makefile itself needs a Unix shell (WSL preferred, or Git Bash + make). A teammate with an existing CUDA torch (lab machine, other coursework) may keep it — E3 constructs its model and tensors on `config.TORCH_DEVICE = "cpu"`, never `cuda.is_available()` autodetection, so the installed wheel cannot change any number.
 
 - [ ] **Determinism recipe** (put in `src/contracts.py (seed_everything)`, called by every entry point):
 
@@ -1880,6 +1880,7 @@ Recommended interpreter: **Python 3.12**, provisioned by conda on WSL2 Ubuntu (M
 name: pair-trading
 channels:
   - conda-forge
+  - nodefaults
 dependencies:
   - python=3.12
   - pip
@@ -1899,7 +1900,8 @@ dependencies:
       # --- ML ---
       - scikit-learn==1.9.0 # KMeans/LogReg/LDA-QDA/metrics; pulls in narwhals
       - statsmodels==0.14.6 # report-facing OLS summaries only; verify pandas-3 import
-      - torch==2.13.0+cpu   # E3 + the freeze/load path; wheel verified on the index 2026-08-03
+      - torch==2.13.0+cpu ; sys_platform == "linux" or sys_platform == "win32"   # Linux/WSL + Windows: CPU-index wheel (both verified 2026-08-03)
+      - torch==2.13.0 ; sys_platform == "darwin"       # macOS: PyPI wheel, CPU-only by nature (Apple Silicon only for torch >= 2.3 — see plan 7.5)
       # --- plotting / testing ---
       - matplotlib==3.10.3  # Agg-only usage; newer 3.10.x/3.11.x fine, re-pin — verify locally
       - pytest==9.1.1       # golden-file + leakage test suite
@@ -1908,6 +1910,8 @@ dependencies:
 # A teammate with an existing CUDA torch may keep it for other coursework — the
 # pipeline pins computation to config.TORCH_DEVICE = "cpu", so results are
 # identical regardless of which wheel is installed.
+# Native Windows: the env works as-is, but the Makefile needs a Unix shell —
+# run the pipeline from WSL (preferred) or Git Bash with make installed.
 ```
 
 - [ ] Day 1 kickoff includes one command by each person: `conda env create -f environment.yml && conda activate pair-trading`, then `pytest -q` — torch rides along via the `+cpu` pin, no separate step. If pip's resolver rejects any pin (`scipy`/`matplotlib` remain flagged **verify locally**; `curl_cffi` was verified 2026-08-03 — 0.13.0 conflicted with yfinance 1.5.2's >=0.15 requirement and is pinned 0.16.0), the person who hits it fixes the pin, commits, and posts in the channel. The file is frozen after Day 1 like the config.
