@@ -1895,7 +1895,7 @@ dependencies:
       - scipy==1.16.0       # sklearn/statsmodels dep; verify locally that resolver agrees
       # --- data ---
       - yfinance==1.5.2     # scraper: pin hard, never float (see 7.1)
-      - curl_cffi==0.13.0   # optional yfinance transport, dodges Yahoo blocking; verify locally
+      - curl_cffi==0.16.0   # required by yfinance>=1.5 (>=0.15); dodges Yahoo blocking
       # --- ML ---
       - scikit-learn==1.9.0 # KMeans/LogReg/LDA-QDA/metrics; pulls in narwhals
       - statsmodels==0.14.6 # report-facing OLS summaries only; verify pandas-3 import
@@ -1910,7 +1910,7 @@ dependencies:
 # identical regardless of which wheel is installed.
 ```
 
-- [ ] Day 1 kickoff includes one command by each person: `conda env create -f environment.yml && conda activate pair-trading`, then `pytest -q` — torch rides along via the `+cpu` pin, no separate step. If pip's resolver rejects any pin (most likely `scipy`/`curl_cffi`/`matplotlib` — the three flagged **verify locally**), the person who hits it fixes the pin, commits, and posts in the channel. The file is frozen after Day 1 like the config.
+- [ ] Day 1 kickoff includes one command by each person: `conda env create -f environment.yml && conda activate pair-trading`, then `pytest -q` — torch rides along via the `+cpu` pin, no separate step. If pip's resolver rejects any pin (`scipy`/`matplotlib` remain flagged **verify locally**; `curl_cffi` was verified 2026-08-03 — 0.13.0 conflicted with yfinance 1.5.2's >=0.15 requirement and is pinned 0.16.0), the person who hits it fixes the pin, commits, and posts in the channel. The file is frozen after Day 1 like the config.
 - [ ] `pip freeze > requirements.lock.txt` (run inside the activated env) after the first successful install, committed — that lockfile, not `environment.yml`, is what the report's reproducibility statement cites.
 
 ### 7.10 Repro discipline: Makefile + RUNBOOK

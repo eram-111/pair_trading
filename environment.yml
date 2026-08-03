@@ -17,7 +17,7 @@ dependencies:
       - scipy==1.16.0       # sklearn/statsmodels dep; verify locally that resolver agrees
       # --- data ---
       - yfinance==1.5.2     # scraper: pin hard, never float (see 7.1)
-      - curl_cffi==0.13.0   # optional yfinance transport, dodges Yahoo blocking; verify locally
+      - curl_cffi==0.16.0   # required by yfinance>=1.5 (>=0.15); dodges Yahoo blocking
       # --- ML ---
       - scikit-learn==1.9.0 # KMeans/LogReg/LDA-QDA/metrics; pulls in narwhals
       - statsmodels==0.14.6 # report-facing OLS summaries only; verify pandas-3 import
