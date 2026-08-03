@@ -385,6 +385,7 @@ EMBARGO_DAYS: int = 10          # further trading days dropped after each bounda
 TAU_RULE: str = "see-plan-sec-5"     # pre-registered validation rule (unchanged from v1);
                                      # never touched on test
 E3_HIDDEN: tuple[int, ...] = (16,)   # small MLP; details in Section 5 (Slice P3)
+TORCH_DEVICE: str = "cpu"            # NEVER autodetect cuda — reproducibility requires same-device compute everywhere
 
 # ----------------------------------------------------------------- Step 11 (execution / costs)
 ENTRY_LAG_DAYS: int = 1         # enter at close of trigger_date + 1 trading day
@@ -521,7 +522,7 @@ Applied on fixture data (fast) to at least: **(1)** `factors.compute_factors` �
 
 ### 2.7 Environment
 
-Python **3.12** via **conda** (Miniforge, Miniconda, or Anaconda — whatever each person already has): `conda env create -f environment.yml && conda activate pair-trading`, then the one-line CPU-torch install (7.9). The pins live in `environment.yml`'s **pip section** — pip-inside-conda deliberately, because the exact version pins were verified against PyPI and `yfinance`/`curl_cffi` are pip-native; conda-forge equivalents would drift from the verified set. Torch is installed post-create from the CPU wheel index so nobody downloads CUDA. Packages: `numpy`, `pandas`, `pyarrow`, `scikit-learn`, `statsmodels`, `torch` (CPU), `yfinance`, `matplotlib`, `pytest`.
+Python **3.12** via **conda** (Miniforge, Miniconda, or Anaconda — whatever each person already has): `conda env create -f environment.yml && conda activate pair-trading` — one command, torch included via the `+cpu` pin behind the extra CPU wheel index (7.9). The pins live in `environment.yml`'s **pip section** — pip-inside-conda deliberately, because the exact version pins were verified against PyPI and `yfinance`/`curl_cffi` are pip-native; conda-forge equivalents would drift from the verified set. The `torch==2.13.0+cpu` pin is only satisfiable from the CPU wheel index, so nobody can accidentally download CUDA. Packages: `numpy`, `pandas`, `pyarrow`, `scikit-learn`, `statsmodels`, `torch` (CPU), `yfinance`, `matplotlib`, `pytest`.
 
 **WSL2 note:** no display server — every plotting module sets `matplotlib.use("Agg")` before any pyplot import (enforced by the two-line helper `src.plotstyle.apply_style()` (Section 7.7) that also fixes figure DPI/size), and all figures are **saved** to `results/figures/`, never `plt.show()`n. `make figures` must run headless on all three machines.
 
@@ -1807,11 +1808,7 @@ def window_betas(F: np.ndarray, R: np.ndarray, ridge: float = 0.0) -> np.ndarray
 
 Verified current: **torch 2.13.0** (2026-07-08). We need CPU wheels only.
 
-- [ ] Install from the CPU index so nobody downloads 2+ GB of CUDA:
-
-```
-pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu
-```
+- [ ] torch installs **with the env** — `environment.yml` pins `torch==2.13.0+cpu` behind `--extra-index-url https://download.pytorch.org/whl/cpu`. The `+cpu` local-version pin can only be satisfied by the CPU index, so the CUDA-bundled PyPI wheel is unreachable; the install either gets the ~200MB CPU wheel or fails loudly. No separate install step exists. A teammate with an existing CUDA torch (lab machine, other coursework) may keep it — E3 constructs its model and tensors on `config.TORCH_DEVICE = "cpu"`, never `cuda.is_available()` autodetection, so the installed wheel cannot change any number.
 
 - [ ] **Determinism recipe** (put in `src/contracts.py (seed_everything)`, called by every entry point):
 
@@ -1887,6 +1884,10 @@ dependencies:
   - python=3.12
   - pip
   - pip:
+      # The extra index ADDS PyTorch's CPU wheel host alongside PyPI. The +cpu pin
+      # below can ONLY be satisfied there (PyPI's plain 2.13.0 doesn't match it),
+      # so pip can never silently grab the ~2.5GB CUDA-bundled wheel.
+      - --extra-index-url https://download.pytorch.org/whl/cpu
       # --- core numerics (Py 3.12) ---
       - numpy==2.5.1        # current stable; 2.5 line requires Py>=3.12
       - pandas==3.0.5       # current 3.0.x patch; CoW + str dtype defaults (see 7.2)
@@ -1898,17 +1899,18 @@ dependencies:
       # --- ML ---
       - scikit-learn==1.9.0 # KMeans/LogReg/LDA-QDA/metrics; pulls in narwhals
       - statsmodels==0.14.6 # report-facing OLS summaries only; verify pandas-3 import
+      - torch==2.13.0+cpu   # E3 + the freeze/load path; wheel verified on the index 2026-08-03
       # --- plotting / testing ---
       - matplotlib==3.10.3  # Agg-only usage; newer 3.10.x/3.11.x fine, re-pin — verify locally
       - pytest==9.1.1       # golden-file + leakage test suite
 
-# torch is NOT in the yml — install it post-create from the CPU wheel index (see 7.5),
-# so pip cannot accidentally resolve the CUDA-bundled PyPI wheel:
-#   conda activate pair-trading
-#   pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu
+# One command does everything: conda env create -f environment.yml
+# A teammate with an existing CUDA torch may keep it for other coursework — the
+# pipeline pins computation to config.TORCH_DEVICE = "cpu", so results are
+# identical regardless of which wheel is installed.
 ```
 
-- [ ] Day 1 kickoff includes two commands by each person: `conda env create -f environment.yml && conda activate pair-trading` plus the torch line, then `pytest -q`. If pip's resolver rejects any pin (most likely `scipy`/`curl_cffi`/`matplotlib` — the three flagged **verify locally**), the person who hits it fixes the pin, commits, and posts in the channel. The file is frozen after Day 1 like the config.
+- [ ] Day 1 kickoff includes one command by each person: `conda env create -f environment.yml && conda activate pair-trading`, then `pytest -q` — torch rides along via the `+cpu` pin, no separate step. If pip's resolver rejects any pin (most likely `scipy`/`curl_cffi`/`matplotlib` — the three flagged **verify locally**), the person who hits it fixes the pin, commits, and posts in the channel. The file is frozen after Day 1 like the config.
 - [ ] `pip freeze > requirements.lock.txt` (run inside the activated env) after the first successful install, committed — that lockfile, not `environment.yml`, is what the report's reproducibility statement cites.
 
 ### 7.10 Repro discipline: Makefile + RUNBOOK
@@ -1952,14 +1954,13 @@ all: data tracka trackb trackc dataset grid figures
 1. git clone <repo> && cd pair_trading
 2. conda env create -f environment.yml
 3. conda activate pair-trading
-4. pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu
-5. pytest -q                      # all green before anything else
-6. make all                       # raw parquet -> full train+val grid, ~minutes
-7. make noise-test                # must find nothing
-8. make test-run                  # Day 4, once, all three watching
+4. pytest -q                      # all green before anything else
+5. make all                       # raw parquet -> full train+val grid, ~minutes
+6. make noise-test                # must find nothing
+7. make test-run                  # Day 4, once, all three watching
 ```
 
-- [ ] Definition of done: a teammate who has never touched the repo runs steps 1–7 on a clean WSL2 machine on Day 3 and gets bit-identical `results/metrics_*` (same seed, same lockfile). That dry-run *is* the reproducibility claim in the report.
+- [ ] Definition of done: a teammate who has never touched the repo runs steps 1–6 on a clean WSL2 machine on Day 3 and gets bit-identical `results/metrics_*` (same seed, same lockfile). That dry-run *is* the reproducibility claim in the report.
 
 Version sources checked 2026-07-31: [yfinance PyPI](https://pypi.org/project/yfinance/) / [changelog](https://github.com/ranaroussi/yfinance/blob/main/CHANGELOG.rst), [pandas 3.0 release notes](https://pandas.pydata.org/docs/whatsnew/v3.0.0.html), [NumPy news](https://numpy.org/news/), [scikit-learn release history](https://scikit-learn.org/stable/whats_new.html), [PyTorch releases](https://github.com/pytorch/pytorch/releases), [pyarrow PyPI](https://pypi.org/project/pyarrow/), [statsmodels releases](https://github.com/statsmodels/statsmodels/releases), [pytest changelog](https://docs.pytest.org/en/stable/changelog.html).
 
