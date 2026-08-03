@@ -522,7 +522,7 @@ Applied on fixture data (fast) to at least: **(1)** `factors.compute_factors` �
 
 ### 2.7 Environment
 
-Python **3.12** via **conda** (Miniforge, Miniconda, or Anaconda — whatever each person already has): `conda env create -f environment.yml && conda activate pair-trading` — one command, torch included via the `+cpu` pin behind the extra CPU wheel index (7.9). The pins live in `environment.yml`'s **pip section** — pip-inside-conda deliberately, because the exact version pins were verified against PyPI and `yfinance`/`curl_cffi` are pip-native; conda-forge equivalents would drift from the verified set. The `torch==2.13.0+cpu` pin is only satisfiable from the CPU wheel index, so nobody can accidentally download CUDA. Packages: `numpy`, `pandas`, `pyarrow`, `scikit-learn`, `statsmodels`, `torch` (CPU), `yfinance`, `matplotlib`, `pytest`.
+Python **3.12** via **conda** (Miniforge, Miniconda, or Anaconda — whatever each person already has): `conda env create -f environment.yml && conda activate pair-trading` — one command, torch included via the `+cpu` pin behind the extra CPU wheel index (7.9). The pins live in `environment.yml`'s **pip section** — pip-inside-conda deliberately, because the exact version pins were verified against PyPI and `yfinance`/`curl_cffi` are pip-native; conda-forge equivalents would drift from the verified set. torch is ONE version team-wide — `2.2.2`, the Intel-mac ceiling (see 7.5) — with platform markers; the linux `+cpu` pin is only satisfiable from the CPU wheel index, so nobody can accidentally download CUDA. Packages: `numpy`, `pandas`, `pyarrow`, `scikit-learn`, `statsmodels`, `torch` (CPU), `yfinance`, `matplotlib`, `pytest`.
 
 **WSL2 note:** no display server — every plotting module sets `matplotlib.use("Agg")` before any pyplot import (enforced by the two-line helper `src.plotstyle.apply_style()` (Section 7.7) that also fixes figure DPI/size), and all figures are **saved** to `results/figures/`, never `plt.show()`n. `make figures` must run headless on all three machines.
 
@@ -1759,9 +1759,9 @@ spy = yf.download("SPY", ...)["Close"]      # still a DataFrame with one column 
 
 ### 7.2 pandas / numpy / pyarrow
 
-Verified current: **pandas 3.0.5** (3.0.0 landed 2026-01-21), **numpy 2.5.1** (2.5.0 **drops Python 3.11**), **pyarrow 25.0.0**.
+Verified current: **pandas 3.0.5** (3.0.0 landed 2026-01-21), **pyarrow 25.0.0**. numpy is deliberately held at **1.26.4** — not the current 2.5.x — because the team-wide `torch==2.2.2` decision (see 7.5) predates NumPy 2; all other pins verified compatible with 1.26.
 
-- [ ] **Use Python 3.12** (see 7.9). That makes numpy 2.5.x legal; on 3.11 you would be stuck on numpy 2.4.x and fighting resolver conflicts.
+- [ ] **Use Python 3.12** (see 7.9) — the newest interpreter with torch 2.2.2 (cp312) wheels on every team platform incl. Intel mac.
 - [ ] **pandas 3.0 behavior changes to be aware of** (we pin 3.0.5, not 2.x, because yfinance/sklearn are tested against it by now): Copy-on-Write is always on — **chained assignment silently does nothing**; always write `df.loc[mask, col] = ...`. The default string dtype is the dedicated `str` dtype, not `object` — comparisons with ticker strings are unaffected, but `df.columns.dtype` checks should use `df.columns.map(type)` sparingly and just trust label equality.
 - [ ] **Parquet round-trip rules** (bugs here corrupt the interface contracts, so they're worth 10 minutes of tests on Day 1):
   - A `DatetimeIndex` **is** preserved through `to_parquet`/`read_parquet` with the pyarrow engine, including its name. Give every date index the name `"date"` before writing and assert it after reading.
@@ -1806,9 +1806,9 @@ def window_betas(F: np.ndarray, R: np.ndarray, ridge: float = 0.0) -> np.ndarray
 
 ### 7.5 PyTorch (CPU only)
 
-Verified current: **torch 2.13.0** (2026-07-08). We need CPU wheels only.
+Team-wide pin: **torch 2.2.2** (the last release with Intel-mac builds — see the single-version decision below). We need CPU wheels only.
 
-- [ ] torch installs **with the env** — `environment.yml` pins `torch==2.13.0+cpu` behind `--extra-index-url https://download.pytorch.org/whl/cpu`. The `+cpu` local-version pin can only be satisfied by the CPU index, so the CUDA-bundled PyPI wheel is unreachable; the install either gets the ~200MB CPU wheel or fails loudly. No separate install step exists. **macOS caveat:** the `+cpu` tag is Linux-only, so the yml uses platform markers (`sys_platform`); on macOS the plain PyPI wheel is already CPU-only. Note PyTorch dropped **Intel-mac** builds after 2.2.2 — a teammate on an Intel Mac (or an Apple Silicon Mac running an x86_64/Rosetta conda, which reports `osx-64`) cannot install torch 2.13 at all; Apple Silicon needs a *native arm64* conda (e.g. Miniforge arm64). If an Intel Mac is unavoidable, authoritative runs stay on Linux/WSL and that machine gets a documented local torch fallback. **Windows:** the CPU index ships win_amd64 `+cpu` wheels, so Windows shares Linux's pin via the marker (verified 2026-08-03) — important there, since a CUDA-equipped Windows box is the likeliest machine to otherwise pull the CUDA wheel; note the Makefile itself needs a Unix shell (WSL preferred, or Git Bash + make). A teammate with an existing CUDA torch (lab machine, other coursework) may keep it — E3 constructs its model and tensors on `config.TORCH_DEVICE = "cpu"`, never `cuda.is_available()` autodetection, so the installed wheel cannot change any number.
+- [ ] torch installs **with the env**, ONE version team-wide: **`torch==2.2.2`** — chosen because it is the last release with Intel-mac builds (one teammate's hard ceiling), so every machine runs the identical release. Platform markers in the yml give linux/windows the slim `+cpu` build from `--extra-index-url https://download.pytorch.org/whl/cpu` (the `+cpu` pin is only satisfiable there, so the CUDA-bundled wheel is unreachable) and macs the PyPI wheel (CPU-only by nature). **Consequence, accepted knowingly:** torch 2.2.x predates NumPy 2 and breaks with it, so numpy is pinned `1.26.4` — every other pin was verified to accept numpy>=1.26 (pandas 3.0.5 requires exactly `>=1.26.0`; scipy 1.16 caps at `<2.6`). E3 uses only Linear/ReLU/BCE/Adam — ancient-stable APIs, nothing 2.2 lacks. A teammate with an existing CUDA torch (lab machine, other coursework) may keep it — E3 constructs its model and tensors on `config.TORCH_DEVICE = "cpu"`, never `cuda.is_available()` autodetection, so the installed wheel cannot change any number.
 
 - [ ] **Determinism recipe** (put in `src/contracts.py (seed_everything)`, called by every entry point):
 
@@ -1885,33 +1885,35 @@ dependencies:
   - python=3.12
   - pip
   - pip:
-      # The extra index ADDS PyTorch's CPU wheel host alongside PyPI. The +cpu pin
-      # below can ONLY be satisfied there (PyPI's plain 2.13.0 doesn't match it),
-      # so pip can never silently grab the ~2.5GB CUDA-bundled wheel.
+      # The extra index ADDS PyTorch's CPU wheel host alongside PyPI.
       - --extra-index-url https://download.pytorch.org/whl/cpu
+      # --- torch: ONE version team-wide. 2.2.2 is the last release with Intel-mac
+      #     builds (Jaskaran's machine is the ceiling). Same release everywhere;
+      #     linux/windows get the slim +cpu build, macs get the PyPI wheel, which
+      #     is CPU-only by nature. Pipeline computes on config.TORCH_DEVICE="cpu".
+      - torch==2.2.2+cpu ; sys_platform == "linux"
+      - torch==2.2.2 ; sys_platform == "darwin"
+      - torch==2.2.2+cpu ; sys_platform == "win32"
       # --- core numerics (Py 3.12) ---
-      - numpy==2.5.1        # current stable; 2.5 line requires Py>=3.12
-      - pandas==3.0.5       # current 3.0.x patch; CoW + str dtype defaults (see 7.2)
+      - numpy==1.26.4       # deliberately NOT 2.x: torch 2.2.x predates numpy 2 and
+      #                       breaks with it; every pin below accepts >=1.26 (verified 2026-08-03)
+      - pandas==3.0.5       # unchanged — requires numpy>=1.26, satisfied; CoW + str dtype (see 7.2)
       - pyarrow==25.0.0     # parquet engine for every artifact contract
-      - scipy==1.16.0       # sklearn/statsmodels dep; verify locally that resolver agrees
+      - scipy==1.16.0       # accepts numpy>=1.25.2,<2.6 (verified)
       # --- data ---
       - yfinance==1.5.2     # scraper: pin hard, never float (see 7.1)
       - curl_cffi==0.16.0   # required by yfinance>=1.5 (>=0.15); dodges Yahoo blocking
       # --- ML ---
-      - scikit-learn==1.9.0 # KMeans/LogReg/LDA-QDA/metrics; pulls in narwhals
-      - statsmodels==0.14.6 # report-facing OLS summaries only; verify pandas-3 import
-      - torch==2.13.0+cpu ; sys_platform == "linux" or sys_platform == "win32"   # Linux/WSL + Windows: CPU-index wheel (both verified 2026-08-03)
-      - torch==2.13.0 ; sys_platform == "darwin"       # macOS: PyPI wheel, CPU-only by nature (Apple Silicon only for torch >= 2.3 — see plan 7.5)
+      - scikit-learn==1.9.0 # KMeans/LogReg/LDA-QDA/metrics; accepts numpy>=1.24
+      - statsmodels==0.14.6 # report-facing OLS summaries only; accepts numpy>=1.22
       # --- plotting / testing ---
-      - matplotlib==3.10.3  # Agg-only usage; newer 3.10.x/3.11.x fine, re-pin — verify locally
+      - matplotlib==3.10.3  # Agg-only usage; accepts numpy>=1.23
       - pytest==9.1.1       # golden-file + leakage test suite
 
 # One command does everything: conda env create -f environment.yml
-# A teammate with an existing CUDA torch may keep it for other coursework — the
-# pipeline pins computation to config.TORCH_DEVICE = "cpu", so results are
-# identical regardless of which wheel is installed.
-# Native Windows: the env works as-is, but the Makefile needs a Unix shell —
-# run the pipeline from WSL (preferred) or Git Bash with make installed.
+# Already created it once? conda env update -f environment.yml --prune
+# (downgrades numpy in place). A CUDA torch elsewhere is fine for other work —
+# the pipeline pins computation to config.TORCH_DEVICE = "cpu".
 ```
 
 - [ ] Day 1 kickoff includes one command by each person: `conda env create -f environment.yml && conda activate pair-trading`, then `pytest -q` — torch rides along via the `+cpu` pin, no separate step. If pip's resolver rejects any pin (`scipy`/`matplotlib` remain flagged **verify locally**; `curl_cffi` was verified 2026-08-03 — 0.13.0 conflicted with yfinance 1.5.2's >=0.15 requirement and is pinned 0.16.0), the person who hits it fixes the pin, commits, and posts in the channel. The file is frozen after Day 1 like the config.

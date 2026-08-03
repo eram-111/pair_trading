@@ -7,30 +7,32 @@ dependencies:
   - python=3.12
   - pip
   - pip:
-      # The extra index ADDS PyTorch's CPU wheel host alongside PyPI. The +cpu pin
-      # below can ONLY be satisfied there (PyPI's plain 2.13.0 doesn't match it),
-      # so pip can never silently grab the ~2.5GB CUDA-bundled wheel.
+      # The extra index ADDS PyTorch's CPU wheel host alongside PyPI.
       - --extra-index-url https://download.pytorch.org/whl/cpu
+      # --- torch: ONE version team-wide. 2.2.2 is the last release with Intel-mac
+      #     builds (Jaskaran's machine is the ceiling). Same release everywhere;
+      #     linux/windows get the slim +cpu build, macs get the PyPI wheel, which
+      #     is CPU-only by nature. Pipeline computes on config.TORCH_DEVICE="cpu".
+      - torch==2.2.2+cpu ; sys_platform == "linux"
+      - torch==2.2.2 ; sys_platform == "darwin"
+      - torch==2.2.2+cpu ; sys_platform == "win32"
       # --- core numerics (Py 3.12) ---
-      - numpy==2.5.1        # current stable; 2.5 line requires Py>=3.12
-      - pandas==3.0.5       # current 3.0.x patch; CoW + str dtype defaults (see 7.2)
+      - numpy==1.26.4       # deliberately NOT 2.x: torch 2.2.x predates numpy 2 and
+      #                       breaks with it; every pin below accepts >=1.26 (verified 2026-08-03)
+      - pandas==3.0.5       # unchanged — requires numpy>=1.26, satisfied; CoW + str dtype (see 7.2)
       - pyarrow==25.0.0     # parquet engine for every artifact contract
-      - scipy==1.16.0       # sklearn/statsmodels dep; verify locally that resolver agrees
+      - scipy==1.16.0       # accepts numpy>=1.25.2,<2.6 (verified)
       # --- data ---
       - yfinance==1.5.2     # scraper: pin hard, never float (see 7.1)
       - curl_cffi==0.16.0   # required by yfinance>=1.5 (>=0.15); dodges Yahoo blocking
       # --- ML ---
-      - scikit-learn==1.9.0 # KMeans/LogReg/LDA-QDA/metrics; pulls in narwhals
-      - statsmodels==0.14.6 # report-facing OLS summaries only; verify pandas-3 import
-      - torch==2.13.0+cpu ; sys_platform == "linux" or sys_platform == "win32"   # Linux/WSL + Windows: CPU-index wheel (both verified 2026-08-03)
-      - torch==2.13.0 ; sys_platform == "darwin"       # macOS: PyPI wheel, CPU-only by nature (Apple Silicon only for torch >= 2.3 — see plan 7.5)
+      - scikit-learn==1.9.0 # KMeans/LogReg/LDA-QDA/metrics; accepts numpy>=1.24
+      - statsmodels==0.14.6 # report-facing OLS summaries only; accepts numpy>=1.22
       # --- plotting / testing ---
-      - matplotlib==3.10.3  # Agg-only usage; newer 3.10.x/3.11.x fine, re-pin — verify locally
+      - matplotlib==3.10.3  # Agg-only usage; accepts numpy>=1.23
       - pytest==9.1.1       # golden-file + leakage test suite
 
 # One command does everything: conda env create -f environment.yml
-# A teammate with an existing CUDA torch may keep it for other coursework — the
-# pipeline pins computation to config.TORCH_DEVICE = "cpu", so results are
-# identical regardless of which wheel is installed.
-# Native Windows: the env works as-is, but the Makefile needs a Unix shell —
-# run the pipeline from WSL (preferred) or Git Bash with make installed.
+# Already created it once? conda env update -f environment.yml --prune
+# (downgrades numpy in place). A CUDA torch elsewhere is fine for other work —
+# the pipeline pins computation to config.TORCH_DEVICE = "cpu".

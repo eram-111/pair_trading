@@ -11,3 +11,4 @@ and the model-freeze hashes. Scribe: P1. No silent changes, ever.
 2026-08-02 | Repo layout: flat src/ (~16 files, one owner each; models/ the only subpackage); "modular" means people, not files | (ratify at kickoff)
 2026-08-02 | Environment: conda (environment.yml, pip-pinned section); torch installed post-create from the CPU wheel index | (ratify at kickoff)
 2026-08-02 | Track B: Day-1 stand-in in the loader's exact schema → Monday Bloomberg swap; swap deadline Mon EOD, else price-derived fallback is final | (ratify at kickoff)
+2026-08-03 | torch 2.13.0 -> 2.2.2 team-wide (single version; Intel-mac ceiling) + numpy 2.5.1 -> 1.26.4 (torch-2.2 compat; all pins verified vs 1.26) | (ratify at sync)
