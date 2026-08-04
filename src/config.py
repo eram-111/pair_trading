@@ -80,6 +80,7 @@ EMBARGO_DAYS: int = 10          # further trading days dropped after each bounda
 TAU_RULE: str = "see-plan-sec-5"  # the ONE pre-registered rule lives in Plan Section 5 (P3.6)
                                      # never touched on test
 E3_HIDDEN: tuple[int, ...] = (16,)   # small MLP; details in Section 5 (Slice P3)
+TORCH_DEVICE: str = "cpu"            # NEVER autodetect cuda — reproducibility requires same-device compute everywhere
 
 # ----------------------------------------------------------------- Step 11 (execution / costs)
 ENTRY_LAG_DAYS: int = 1         # enter at close of trigger_date + 1 trading day
