@@ -1,11 +1,10 @@
-"""Artifact schemas, validation, parquet IO, and seeding (plan §2.2 / P3.1).
+"""Defines what every data file in this project must look like, and checks it.
 
-Every producer (P1/P2/P3) calls validate_artifact() before writing an
-artifact, normally via write_parquet(). Schemas transcribe plan §2.2
-verbatim; changing one is a contract change — all-three agreement plus a
-DECISIONS.md entry (§2.6), never a silent edit.
-
-Owner: P3.
+SCHEMAS lists each file's expected columns, dtypes, and index.
+validate_artifact(df, name) raises AssertionError when a frame doesn't
+match. write_parquet/read_parquet route all file IO through that check,
+so a malformed file never lands on disk. seed_everything makes every run
+repeatable. Changing a schema needs team agreement + a DECISIONS.md entry.
 """
 from __future__ import annotations
 
@@ -17,7 +16,7 @@ from src import config
 
 
 class ArtifactSchema:
-    """Expected shape of one §2.2 artifact.
+    """Expected shape of one data artifact.
 
     columns — dict(fixed column name, pandas dtype string) ({} if no fixed columns).
 
@@ -101,30 +100,30 @@ def _check_cost_columns(df: pd.DataFrame) -> None:
 
 # Add more ArtifactSchema if needed or change the format if needed
 SCHEMAS: dict[str, ArtifactSchema] = {
-    # ---------------- raw data (producer P1) ----------------
+    # ---------------- raw data (written by data.py) ----------------
     "prices": ArtifactSchema(columns={}, index="date", extra_float_cols=True),
     "volume": ArtifactSchema(columns={}, index="date", extra_float_cols=True),
     "spy": ArtifactSchema(columns={"SPY": "float64"}, index="date"),
     "universe": ArtifactSchema(columns={"ticker": "str", "sector": "str", "included": "bool"}),
-    # ---------------- processed substrate (P1) ----------------
+    # ---------------- processed substrate (written by data.py / representation.py) ----------------
     "returns": ArtifactSchema(columns={}, index="date", extra_float_cols=True),
     "factors_a": ArtifactSchema(columns={"pc_1": "float64", "pc_2": "float64", "pc_3": "float64", "pc_4": "float64", "pc_5": "float64"}, index="date"),
     "pca_meta": ArtifactSchema(columns={"n_components": "int64", "cum_var_explained": "float64"}, index="date"),
     "loadings_a": ArtifactSchema(columns={"date": "datetime64[us]", "ticker": "str", "component": "int64", "loading": "float64", "beta": "float64"}),
     "residuals_a": ArtifactSchema(columns={}, index="date", extra_float_cols=True),
-    # ---------------- Track B characteristics (P2): fixed cols + one float64 col per Bloomberg/fallback field ----------------
+    # ---------------- Track B characteristics (written by characteristics.py): fixed cols + one float64 col per field ----------------
     "characteristics_raw": ArtifactSchema(columns={"quarter_end": "datetime64[us]", "ticker": "str"}, extra_float_cols=True),
     "characteristics_clean": ArtifactSchema(columns={"quarter_end": "datetime64[us]", "ticker": "str"}, extra_float_cols=True),
     # ---------------- clustering outputs (one file per track) ----------------
     "labels": ArtifactSchema(columns={"window_end": "datetime64[us]", "ticker": "str", "cluster_id": "int64"}),
     "stability": ArtifactSchema(columns={"window_end": "datetime64[us]", "pair_id": "str", "co_clustered": "bool"}, checks=(_check_pair_id_alphabetical,)),
     "pairs": ArtifactSchema(columns={"pair_id": "str", "stock_a": "str", "stock_b": "str", "group_id": "str", "source": "str", "active_from": "datetime64[us]", "active_to": "datetime64[us]"}, checks=(_check_pair_id_alphabetical, _check_source_values)),
-    # ---------------- spreads / z-scores (P1 runs for every track) ----------------
+    # ---------------- spreads / z-scores (written by representation.py, one file per track) ----------------
     "spreads": ArtifactSchema(columns={}, index="date", extra_float_cols=True),
     "zscores": ArtifactSchema(columns={}, index="date", extra_float_cols=True),
-    # ---------------- trigger dataset (P2) — the central contract ----------------
+    # ---------------- trigger dataset (written by dataset.py) — the central contract ----------------
     "triggers": ArtifactSchema(columns={"trigger_id": "str", "pair_id": "str", "source": "str", "trigger_date": "datetime64[us]", "z_trigger": "float64", "f_abs_z": "float64", "f_spread_vol_60d": "float64", "f_resid_mom_5d": "float64", "f_mkt_vol_20d": "float64", "f_rel_volume_20d": "float64", "f_days_since_trigger": "float64", "f_cluster_stability": "float64", "label": "int8", "horizon_end_date": "datetime64[us]", "split": "str"}, checks=(_check_trigger_id_format, _check_split_values, _check_label_binary, _check_source_values)),
-    # ---------------- results (P3's runner and engine) ----------------
+    # ---------------- results (written by engine.py / experiments.py) ----------------
     "decisions": ArtifactSchema(columns={"trigger_id": "str", "enter": "bool", "p_hat": "float64"}),
     "trades": ArtifactSchema(columns={"trigger_id": "str", "pair_id": "str", "entry_date": "datetime64[us]", "exit_date": "datetime64[us]", "exit_reason": "str", "days_held": "int64", "gross_ret": "float64", "net_ret_0bps": "float64", "net_ret_5bps": "float64", "net_ret_10bps": "float64", "net_ret_15bps": "float64", "net_ret_20bps": "float64", "net_ret_30bps": "float64", "net_ret_40bps": "float64", "net_ret_50bps": "float64"}, checks=(_check_cost_columns,)),  
 }
@@ -221,7 +220,7 @@ def read_parquet(path: Path | str) -> pd.DataFrame:
 
 # ------------------------------------------------------------------- seeding
 def seed_everything(seed: int = config.SEED) -> None:
-    """Seed random, numpy, and torch; enable deterministic algorithms (§7.5).
+    """Seed random, numpy, and torch; enable deterministic algorithms.
 
     Called by every pipeline entry point and every test. torch is imported
     lazily inside this function so non-model code paths never require it at

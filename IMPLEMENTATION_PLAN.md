@@ -1543,8 +1543,8 @@ Total ≈ 34h. Day 3 AM is Track C by design — its input (`corr_windows.npz`) 
 
 ### Slice P3 — definition of done
 
-- [ ] `contracts.py` validates every Section 2.2 artifact; deliberately corrupting a fixture fails the suite; `make test` green on the Day 1 skeleton
-- [ ] `make_synthetic` outputs match the real raw schemas byte-for-byte; two same-seed runs identical
+- [x] `contracts.py` validates every Section 2.2 artifact; deliberately corrupting a fixture fails the suite; `make test` green on the Day 1 skeleton
+- [x] `make_synthetic` outputs match the real raw schemas byte-for-byte; two same-seed runs identical
 - [ ] Engine test suite green: golden 3-trade, shift test, cost arithmetic, concurrency — golden + shift by Day 1 EOD
 - [ ] Every strategy (E0, E1, E2, E3, control) flows through `run_backtest` via a decisions table — zero special cases
 - [ ] `--split test` guard proven by test (date ≥ 2026-08-05, `--i-am-sure`, `FREEZE.md` present, no `TEST_RUN_COMPLETE` marker); test set executed exactly once, Day 4 ~noon, witnessed, from frozen artifacts; marker written

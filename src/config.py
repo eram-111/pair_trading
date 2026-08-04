@@ -1,11 +1,7 @@
-"""Frozen project configuration — CSC311 pairs-trading project (plan v2).
+"""Every tunable number and setting in the project.
 
-CHANGE CONTROL: every value in this file was ratified at the Day 1 kickoff
-(Sat 2026-08-01). No value may change without (a) explicit agreement of all
-three team members and (b) an appended entry in DECISIONS.md (date, old ->
-new, reason, initials of all three). Silent edits are treated as bugs.
-Values marked PLACEHOLDER are set later by their named owner via the same
-process and are the only permitted additions.
+All other code imports its constants from here — nothing re-declares a
+window length, threshold, date, or seed locally.
 """
 from __future__ import annotations
 from pathlib import Path
@@ -20,7 +16,7 @@ FIGURES_DIR = RESULTS_DIR / "figures"
 # ----------------------------------------------------------------- Step 0-1
 DOWNLOAD_START: str = "2014-01-01"  # one warm-up year so the first 252d PCA window closes in early 2015
 ANALYSIS_START: str = "2015-01-01"  # the sample the report describes
-DATA_END: str = "2025-01-01"    # frozen — ratified in v1; test = 2023-2024 matches the split dates
+DATA_END: str = "2025-01-01"    # frozen; the 2023-2024 test split ends here
 MAX_MISSING_FRAC: float = 0.02  # drop ticker if >2% of trading days missing
 LOG_RETURNS: bool = True        # r_t = ln(P_t / P_{t-1})
 N_TICKERS: int = 40             # 4 sectors x 10; list lives in data/raw/universe.csv
@@ -37,7 +33,7 @@ RECLUSTER_EVERY: int = 21       # trading days, tracks a/c, trailing 252d format
 TRACK_B_REFRESH: str = "quarterly"
 KMEANS_N_INIT: int = 10         # k-means++ init; k by max silhouette, formation window ONLY
 K_RANGE: dict[str, range] = {
-    "a": range(8, 14), "b": range(10, 14), "c": range(8, 14),  # track d removed in v2
+    "a": range(8, 14), "b": range(10, 14), "c": range(8, 14),
 }
 # Track A cluster input: each stock's factor-beta vector from the formation window
 # Pair rules (Zhang): drop singletons; 2-4 -> all pairs; 5+ -> greedy NN subgroups of 2-3
