@@ -1,0 +1,105 @@
+================================================================
+BLOOMBERG PULL CHEAT SHEET — Track B characteristics (P2.6)
+Goal: 19 CSVs, one per field, each = quarterly dates x 40 tickers
+================================================================
+
+PART 1 — TERMINAL: VERIFY FIELD CODES (~15 min)
+------------------------------------------------
+In the blue command line:
+    AAPL US Equity <GO>
+    FLDS <GO>
+Search each concept below. Confirm the code exists AND has quarterly
+history. If FLDS shows a different code than my candidate, USE FLDS'S
+CODE and write it down (this list becomes FIELDS_USED.md).
+Prefer "as reported" variants where offered (point-in-time).
+Cap the hunting at 15 minutes total.
+
+PART 2 — EXCEL: THE PULL (~90 min, time-boxed)
+------------------------------------------------
+Open Excel ON THE TERMINAL PC (via Bloomberg/Start menu, so the
+Bloomberg ribbon tab is present).
+
+TARGET LAYOUT (one sheet per FIELD — 19 sheets, NOT per company):
+
+     A              B                C                ...   AO
+1    PE_RATIO                                               <- A1 = field code (only cell you change per sheet)
+2                   AAPL US Equity   MSFT US Equity   ...   <- row 2 = 40 tickers
+3
+4    3/31/2015      24.13            19.85            ...   <- grid fills itself
+...  ...            ...              ...
+44   12/31/2024     ...              ...
+
+STEPS:
+ 1. A1: type first field code:  PE_RATIO
+ 2. B2: paste the full ticker list (bottom of this sheet), then with
+    B2 selected:  Data tab -> Text to Columns -> Delimited -> Next ->
+    tick Comma -> Finish.   (tickers spread across B2:AO2)
+ 3. A4: type (shows dates + first ticker's values):
+
+    =BDH(B$2,$A$1,"12/31/2014","12/31/2024","Per=CQ","Days=A","Fill=P")
+
+ 4. C4: type (values only — note the extra "Dts=H"):
+
+    =BDH(C$2,$A$1,"12/31/2014","12/31/2024","Per=CQ","Days=A","Fill=P","Dts=H")
+
+ 5. Copy C4 across: click C4 -> Ctrl+C -> select D4:AO4 -> Ctrl+V
+ 6. WAIT for the status bar to finish (BDH fills asynchronously).
+    Stalled? Bloomberg ribbon -> Refresh All.
+ 7. Save this sheet: F12 -> File name = field code (PE_RATIO) ->
+    Save as type: CSV (Comma delimited) -> Save -> "active sheet
+    only" warning -> Yes.
+ 8. Next field: right-click sheet tab -> Move or Copy -> tick
+    "Create a copy" -> OK -> on the copy change ONLY A1 to the next
+    field code -> wait -> F12 -> save CSV under that field's name.
+ 9. Repeat until the checklist below is done.
+
+FIELD CHECKLIST (= CSV filenames; * = verify in FLDS if it errors):
+    PE_RATIO                PX_TO_BOOK_RATIO
+    PX_TO_SALES_RATIO       PX_TO_EBITDA *
+    CUR_MKT_CAP             EQY_SH_OUT
+    SALES_GROWTH            CASH_FLOW_GROWTH *
+    FREE_CASH_FLOW_1_YEAR_GROWTH (confirmed 2026-08-04; the plan's
+      FREE_CASH_FLOW_GROWTH guess doesn't exist — this is FCF 1-yr
+      growth, whole-firm, YoY)      RETURN_COM_EQY *
+    EQY_DVD_SH_12M_NET (confirmed 2026-08-04; EQY_DVD_SH guess
+      doesn't exist — this is trailing-12M DPS, net)
+    VOLATILITY_60D
+    RSI_14D                 PX_LAST
+    PX_ASK                  PX_BID
+    TOT_ANALYST_REC *       TOT_BUY_REC
+    TOT_SELL_REC
+
+OPTIONAL (only if all 19 quarterly CSVs are saved and time remains):
+duplicate ONLY the market-priced sheets (PX_LAST, CUR_MKT_CAP,
+VOLATILITY_60D, RSI_14D, PX_ASK, PX_BID), change "Per=CQ" to
+"Per=CM" in both formulas, save as {FIELD}_monthly.csv.
+(Covers a future refresh-cadence robustness check. Dessert, not meal.)
+
+BDH OPTION MEANINGS:
+    Per=CQ   calendar quarterly        Per=CM   calendar monthly
+    Days=A   include all days          Fill=P   carry previous value
+    Dts=H    hide the date column (keeps ticker columns aligned)
+
+TROUBLESHOOTING:
+    #NAME?          -> Bloomberg add-in not loaded; reopen Excel via
+                       the Bloomberg menu
+    Invalid Field   -> wrong code; use what FLDS shows, note it down
+    Field mostly blank across many tickers -> drop it, move on.
+                       12 clean fields beat 19 + a second trip.
+    Stray typing under row 4 breaks the array fill — don't.
+
+BEFORE LEAVING THE SEAT:
+    [ ] all CSVs saved (one per field)
+    [ ] 5 random cells spot-checked: screen vs CSV
+    [ ] final field codes written down       -> FIELDS_USED.md
+    [ ] CSVs copied off the terminal PC (email/USB/drive)
+
+BACK HOME:
+    CSVs -> data/raw/characteristics/
+    Then regenerate Track B before any model tuning:
+        pairs_b -> zscores_b -> triggers_b
+    Log the swap in DECISIONS.md.
+
+TICKER LIST (paste into B2, then Text to Columns on comma):
+AAPL US Equity, MSFT US Equity, NVDA US Equity, ORCL US Equity, CSCO US Equity, INTC US Equity, IBM US Equity, TXN US Equity, ADBE US Equity, QCOM US Equity, JPM US Equity, BAC US Equity, WFC US Equity, C US Equity, GS US Equity, MS US Equity, USB US Equity, PNC US Equity, AXP US Equity, BLK US Equity, XOM US Equity, CVX US Equity, COP US Equity, SLB US Equity, EOG US Equity, OXY US Equity, VLO US Equity, MPC US Equity, PSX US Equity, HAL US Equity, PG US Equity, KO US Equity, PEP US Equity, WMT US Equity, COST US Equity, MDLZ US Equity, CL US Equity, KMB US Equity, GIS US Equity, SYY US Equity
+================================================================
