@@ -1,0 +1,4 @@
+trigger_id,pair_id,entry_date,exit_date,exit_reason,days_held,gross_ret,net_ret_0bps,net_ret_5bps,net_ret_10bps,net_ret_15bps,net_ret_20bps,net_ret_30bps,net_ret_40bps,net_ret_50bps
+AAA__BBB__20200106,AAA__BBB,2020-01-07,2020-01-09,reverted,2,0.04,0.04,0.038,0.036,0.034,0.032,0.028,0.024,0.02
+CCC__DDD__20200106,CCC__DDD,2020-01-07,2020-01-14,timeout,5,0.01,0.01,0.008,0.006,0.004,0.002,-0.002,-0.006,-0.01
+EEE__FFF__20200106,EEE__FFF,2020-01-07,2020-01-08,reverted,1,0.03,0.03,0.028,0.026,0.024,0.022,0.018,0.014,0.01
