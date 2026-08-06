@@ -218,6 +218,14 @@ def read_parquet(path: Path | str) -> pd.DataFrame:
     return df
 
 
+def write_validated_csv(df: pd.DataFrame, path: Path | str, name: str) -> None:
+    """Validate then write as CSV — for human-readable artifacts."""
+    validate_artifact(df, name)
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, index=False)
+
+
 # ------------------------------------------------------------------- seeding
 def seed_everything(seed: int = config.SEED) -> None:
     """Seed random, numpy, and torch; enable deterministic algorithms.

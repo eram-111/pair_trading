@@ -1,9 +1,10 @@
 .PHONY: all data tracka trackb trackc dataset grid noise-test test-run figures test
 
-data:            ## returns.parquet + both fixtures from committed raw pulls (NO network)
-	python -m src.data --from-cache
+data:            ## returns.parquet, prices.parquet, volume.parquet, spy.parquet, universe.csv
+	python -m src.data
 	python -m src.make_synthetic
-	python -m src.fixture_zscores
+data_pull:       ## downloads new data from yfinance, then works same as make data
+	python -m src.data --pull
 tracka: data     ## Steps 2-6, track a: factors -> clusters -> pairs -> z-scores, one module
 	python -m src.representation --track a
 trackb: data     ## Track B approach file, then the shared representation machinery
