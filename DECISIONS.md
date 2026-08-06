@@ -12,3 +12,4 @@ and the model-freeze hashes. Scribe: P1. No silent changes, ever.
 2026-08-02 | Environment: conda (environment.yml, pip-pinned section); torch installed post-create from the CPU wheel index | (ratify at kickoff)
 2026-08-02 | Track B: Day-1 stand-in in the loader's exact schema → Monday Bloomberg swap; swap deadline Mon EOD, else price-derived fallback is final | (ratify at kickoff)
 2026-08-03 | torch 2.13.0 -> 2.2.2 team-wide (single version; Intel-mac ceiling) + numpy 2.5.1 -> 1.26.4 (torch-2.2 compat; all pins verified vs 1.26) | (ratify at sync)
+2026-08-06 | Shared clustering API as-built (representation.py, P3): comembership -> pair_from_labels (now takes explicit tickers list); stability_frame -> pair_stability_table; fit_kmeans_select_k unchanged. Plan §P1.5 updated to match | GE

@@ -738,7 +738,7 @@ Each script: `python scripts/checks/check_X.py` → figure + one line, e.g. `PAS
 
 ### P1.5 — SHARED clustering machinery + Track A application (`src/representation.py`, Day 2)
 
-**Goal.** The shared rolling-recluster machinery — k-means wrapper with k selection, co-membership sets, stability frames, the 21-trading-day loop — plus its Track A application: cluster the 40 stocks on formation-window factor-beta vectors → `labels_a`/`stability_a`. **Shared-instrument rule:** this is the only clustering code in the repo. P2 calls `fit_kmeans_select_k`/`comembership`/`stability_frame` for Track B's quarterly snapshots (its own k-range per config); P3 calls them for Track C's partial-correlation distance vectors. Track and feature matrix are parameters, never hardcoded.
+**Goal.** The shared rolling-recluster machinery — k-means wrapper with k selection, co-membership sets, stability frames, the 21-trading-day loop — plus its Track A application: cluster the 40 stocks on formation-window factor-beta vectors → `labels_a`/`stability_a`. **Shared-instrument rule:** this is the only clustering code in the repo. P2 calls `fit_kmeans_select_k`/`pair_from_labels`/`pair_stability_table` for Track B's quarterly snapshots (its own k-range per config). Track and feature matrix are parameters, never hardcoded. *(As-built names, 2026-08-06: `comembership` -> `pair_from_labels`, `stability_frame` -> `pair_stability_table`; `pair_from_labels` takes an explicit `tickers` list.)*
 
 **Consumes:** `loadings_a.parquet` (beta vectors), trading calendar from `returns.parquet`.
 **Produces:** `data/clusters/labels_a.parquet`, `data/clusters/stability_a.parquet` (Section 2 schemas); the importable machinery.
@@ -751,11 +751,11 @@ def fit_kmeans_select_k(X: np.ndarray, k_range: range,
     """k-means++ init, n_init=10, for each k in k_range compute silhouette on X
     (formation data ONLY); return (labels for best k, best_k, best_silhouette)."""
 
-def comembership(labels: np.ndarray) -> set[tuple[str, str]]:
-    """Set of alphabetically-ordered ticker tuples co-clustered under labels."""
+def pair_from_labels(labels: np.ndarray, tickers: list) -> set:
+    """All (first, second) ticker pairs sharing a cluster, alphabetical."""
 
-def stability_frame(prev_pairs: set | None, curr_pairs: set,
-                    window_end: pd.Timestamp) -> pd.DataFrame:
+def pair_stability_table(prev_pairs: set | None, curr_pairs: set,
+                         window_end) -> pd.DataFrame:
     """One row per pair in curr_pairs: (window_end, pair_id, co_clustered =
     pair in prev_pairs). First window: co_clustered = False for all."""
 
@@ -770,12 +770,12 @@ def run_recluster_loop(betas_long: pd.DataFrame, cadence: int = 21,
 - **Cluster input** (config freeze, Zhang's compressed option): each stock's vector of factor betas from the formation window. Use the betas fitted at the **window-end date** (the P1.3 betas dated `window_end` were estimated on exactly the trailing 252 days — no separate re-fit needed). Feature dim = that date's `n_components`; standardize columns of the 40×m beta matrix before k-means (window-local, trivially — it's one cross-section).
 - k selection by **max silhouette, k ∈ 8..13, on formation data only** — never on trading outcomes. Log `(window_end, best_k, silhouette)` to `data/clusters/kmeans_log_a.csv` for the report.
 - `sklearn.cluster.KMeans(init="k-means++", n_init=10, random_state=311)`. **Empty clusters:** sklearn reseeds internally, so no custom handling — but assert `len(np.unique(labels)) == k` after fit and log a warning if a cluster came out empty-then-reseeded (with 40 points and k=13 it can happen); this is the note the spec asks for.
-- **Label switching:** never compare raw `cluster_id` across windows. All cross-window logic goes through `comembership()` sets — invariant to relabelling by construction. `cluster_id` in `labels_a.parquet` is only meaningful within one `window_end`.
+- **Label switching:** never compare raw `cluster_id` across windows. All cross-window logic goes through `pair_from_labels()` sets — invariant to relabelling by construction. `cluster_id` in `labels_a.parquet` is only meaningful within one `window_end`.
 - Stability metric for the report: per window, `mean(co_clustered)`. `stability_a.parquet` is also the direct upstream of `f_cluster_stability` in P2's dataset builder — the contract is the per-pair boolean, not the aggregate.
 - Recluster dates: every 21 trading days on the actual trading calendar (positional stride over `returns.index`, starting at index 252), NOT calendar days.
 - **Clustering-input decision (spec Step 4 says "try both"):** the committed input is Option 2 — factor-beta vectors — on Zhang's decisive evidence (PC-based clustering passed the statistical-arbitrage test at p = 0.01 vs p = 0.785 for raw features). Recorded as an explicit kickoff decision in `DECISIONS.md`, so the deviation from "try both" is deliberate, not an omission. The v1 plan's Option-1 robustness run is **cut in v2** (no slack in the 4-day calendar); the DECISIONS.md entry plus the Zhang citation carry the justification in the report.
 
-**Unit tests:** (a) planted 3-cluster synthetic betas → silhouette selects a k that recovers the planted partition (compare via co-membership sets, not labels); (b) `comembership` invariant under label permutation; (c) `stability_frame` correct on hand-built two-window example; (d) seed 311 → identical labels across two runs; (e) recluster dates are exactly every 21st trading day.
+**Unit tests:** (a) planted 3-cluster synthetic betas → silhouette selects a k that recovers the planted partition (compare via co-membership sets, not labels); (b) `pair_from_labels` invariant under label permutation; (c) `pair_stability_table` correct on hand-built two-window example; (d) seed 311 → identical labels across two runs; (e) recluster dates are exactly every 21st trading day.
 
 **Hours:** 3h, Day 2.
 **Done when:** `labels_a` + `stability_a` written for every recluster date on real data; k-log saved; tests pass; P2 confirms the machinery imports cleanly for the quarterly-snapshot case.
@@ -2001,8 +2001,8 @@ Every requirement in `project_spec_v2.md`, mapped to its v2 location (slice sect
 | Step 4 — "try both" second option (252-length residual series) | §3 P1.5 note: committed skip in DECISIONS.md (Zhang p=0.01 vs 0.785); v1's Option-1 robustness run **cut in v2** | P1 | 1 (decision); robustness run CUT |
 | Step 4 — k-means++, n_init=10, empty-cluster handling | §3 P1.5 notes (assert unique labels == k) + §7.3 explicit `n_init=10` warning | P1 | 2 |
 | Step 4 — choose k by silhouette/elbow, formation window only | §3 P1.5 (max silhouette, k∈8–13, logged to `kmeans_log_a.csv`) | P1 | 2 |
-| Step 4 — label-switching → co-membership matrix | §3 P1.5 `comembership()` (never compare raw labels) | P1 | 2 |
-| Step 4 — stability analysis (fraction co-clustered w→w+1) | §3 P1.5 `stability_frame` + §6.3 F4 (A vs B vs C) | P1 | 2 (figure 4) |
+| Step 4 — label-switching → co-membership matrix | §3 P1.5 `pair_from_labels()` (never compare raw labels) | P1 | 2 |
+| Step 4 — stability analysis (fraction co-clustered w→w+1) | §3 P1.5 `pair_stability_table` + §6.3 F4 (A vs B vs C) | P1 | 2 (figure 4) |
 | **Step 4B.1** — 19 Bloomberg fields, quarterly pull | §4 P2.6 (session plan, FLDS verification, Monday terminal-access contingency) + §7.6 | P2 | 2 |
 | 4B.1 — point-in-time warning (as-reported preferred, else disclosed) | §4 P2.6 step 3 + `FIELDS_USED.md` + limitations | P2 | 2, write-up phase |
 | 4B.2 — sentiment merge (19→18) | §4 P2.7 `clean_snapshot` step 1 (+ 15/5→+0.5 unit test) | P2 | 2 |
