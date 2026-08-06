@@ -5,6 +5,7 @@ __pycache__/
 .DS_Store
 .vscode
 *.pdf
+sync.txt
 
 # results are regenerable; only the frozen finals are committed
 results/*
