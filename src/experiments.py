@@ -157,16 +157,16 @@ def select_tau(model: EntryModel, track: str) -> tuple[float, pd.DataFrame]:
             # taking highest tau if within 1e-6 of best_pnl
             chosen = row["tau"]
 
-    # if tau reached 25 trades, tau with most trades is chosen
-    if not chosen:
+    # if no tau reached 25 trades, tau with most trades is chosen
+    if chosen is None:
         best_trades = 0
         for row in tau_rows:
-            if row["n_trades"] >= best_trades > 0:
+            if row["n_trades"] > 0 and row["n_trades"] >= best_trades:
                 best_trades = row["n_trades"]
                 chosen = row["tau"]
 
     # 0 trades
-    if not chosen:
+    if chosen is None:
         chosen = 0.5
         print(f"select_tau: ({model.name}, track {track}): 0 trades at every tau; tau = 0.5")
 
