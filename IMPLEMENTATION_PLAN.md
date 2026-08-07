@@ -243,11 +243,12 @@ All three tracks run P1's shared clustering/stability machinery. Producers and l
 Producer: the shared pair-builder `src/representation.py` — **canonical frozen signature (authoritative here; Sections 3–5 refer back to this)**:
 
 ```python
-def build_pairs(labels_path: str,
-                features_by_window: dict[pd.Timestamp, pd.DataFrame],  # per-window feature matrices -> within-cluster distances for the 5+ split
+# as-built: takes the labels DataFrame (not a path) and returns the table;
+# the caller writes it with write_validated_csv
+def build_pairs(labels: pd.DataFrame,
+                feature_table_by_window: dict,  # per-window feature matrices -> within-cluster distances for the 5+ split
                 source: str,                    # "track_a" | "track_b" | "track_c"  (track_d removed in v2)
-                calendar: pd.DatetimeIndex,
-                out_csv: str) -> pd.DataFrame
+                calendar: pd.DatetimeIndex) -> pd.DataFrame
 ```
 
 Owner **P1**. Signature stub (raises `NotImplementedError`) committed at kickoff so P2 and P3 can import and mock it from Day 1; implementation tests-green by the **Day 2 midday sync**; called by P2 for track b Day 2 PM and by P3 for track c Day 3 PM. Lands: **a Day 2 EOD (P1), b Day 2 EOD (P2), c Day 3 PM (P3)**. Consumers: P1 (`spreads`, all tracks), P2 (`analysis/consensus-lite`), each track owner (trigger attribution).
@@ -759,10 +760,11 @@ def pair_stability_table(prev_pairs: set | None, curr_pairs: set,
     """One row per pair in curr_pairs: (window_end, pair_id, co_clustered =
     pair in prev_pairs). First window: co_clustered = False for all."""
 
-def run_recluster_loop(betas_long: pd.DataFrame, cadence: int = 21,
-                       formation: int = 252, track: str = "a") -> None:
-    """Every 21 trading days from index 252+21 onward: build per-stock feature
-    vectors, cluster, write labels_{track} and stability_{track}."""
+# as-built: the loop is cluster_all_windows; the caller builds the per-window
+# feature tables (pivot + standardize) and writes the artifacts
+def cluster_all_windows(feature_table_by_window: dict,
+                        k_range: range) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Cluster every window in date order. Returns (labels, stability)."""
 ```
 
 **Algorithm notes:**
@@ -792,16 +794,16 @@ def run_recluster_loop(betas_long: pd.DataFrame, cadence: int = 21,
 **Signatures:**
 
 ```python
-def split_large_cluster(members: list[str], D: pd.DataFrame) -> list[list[str]]:
-    """Zhang 5+ rule via greedy nearest-neighbour. D = within-cluster Euclidean
-    distance matrix over the SAME feature space used for clustering."""
+# as-built: split_large_cluster takes the members' feature rows and computes
+# distances itself; pairs_for_window is folded into build_pairs (one loop);
+# build_pairs takes the labels DataFrame and returns the table (caller writes CSV)
+def split_large_cluster(members: list, features: pd.DataFrame) -> list:
+    """Zhang 5+ rule via greedy nearest-neighbour on the members' feature
+    rows (the SAME feature space used for clustering)."""
 
-def pairs_for_window(labels: pd.DataFrame, features: pd.DataFrame,
-                     window_end: pd.Timestamp, source: str) -> pd.DataFrame:
-
-def build_pairs(labels_path: str, features_by_window: dict[pd.Timestamp, pd.DataFrame],
+def build_pairs(labels: pd.DataFrame, feature_table_by_window: dict,
                 source: str,               # "track_a" | "track_b" | "track_c"  (track_d removed in v2)
-                calendar: pd.DatetimeIndex, out_csv: str) -> pd.DataFrame:
+                calendar: pd.DatetimeIndex) -> pd.DataFrame:
 ```
 
 **Zhang rules, and the 5+ split algorithm precisely:**
@@ -833,15 +835,12 @@ def build_pairs(labels_path: str, features_by_window: dict[pd.Timestamp, pd.Data
 **Signatures:**
 
 ```python
-def build_spread_for_pair(residuals: pd.DataFrame, pair_rows: pd.DataFrame,
-                          warmup: int = 60) -> pd.Series:
-    """All active rows for one pair_id -> spread series over its active runs."""
-
-def zscore(spread: pd.Series, window: int = 60) -> pd.Series:
-    """(spread - rolling_mean) / rolling_std, window-local trailing stats.
-    min_periods=window; NaN during warmup."""
-
-def run_spreads(track: str, residuals_path: str = "data/processed/residuals_a.parquet") -> None:
+# as-built: one function does all pairs — runs, burn-in, spread and z together;
+# the caller writes both frames with write_parquet
+def build_spreads(residuals: pd.DataFrame,
+                  pairs: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Spread and z-score day-series for every pair. Returns (spreads, zscores),
+    date x pair_id; values only on active days, burn-in stays internal."""
 ```
 
 **The re-anchoring policy (the flagged subtlety).** With a 21-day recluster cadence and a 60-day z-window, restarting the spread at every `active_from` would leave every pair NaN-z for its first ~3 windows — most pairs would never become tradeable, and Track B's quarterly (63-day) windows would barely clear warmup. So the frozen policy is:

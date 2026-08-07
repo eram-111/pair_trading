@@ -10,9 +10,9 @@ tracka: data     ## Steps 2-6, track a: factors -> clusters -> pairs -> z-scores
 trackb: data     ## Track B approach file, then the shared representation machinery
 	python -m src.characteristics
 	python -m src.representation --track b
-trackc: tracka   ## Track C approach file (reads corr_windows.npz), then the shared machinery
-	python -m src.partial_corr
-	python -m src.representation --track c
+# trackc: tracka   ## Track C approach file (reads corr_windows.npz), then the shared machinery
+# 	python -m src.partial_corr
+# 	python -m src.representation --track c
 dataset: tracka trackb trackc
 	python -m src.dataset --tracks a,b,c
 grid: dataset    ## E0/E1/E2/E3 x tracks on train+val only (tracks read from config so the Makefile cannot drift from the committed grid)
