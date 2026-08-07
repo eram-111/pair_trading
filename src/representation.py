@@ -400,6 +400,35 @@ def build_spreads(residuals: pd.DataFrame, pairs: pd.DataFrame) -> tuple[pd.Data
 
 # ------------------------- the track-a assembly line ----------------------
 
+def run_track_a(returns: pd.DataFrame) -> tuple:
+    """returns -> every track-a frame, in memory. No files.
+
+    Returns (factors, meta, residuals, loadings, labels, stability,
+    pairs, spreads, zscores). main() writes them; the noise test runs
+    them on synthetic returns.
+    """
+    # 1. rolling PCA
+    factors, meta, residuals, loadings = run_rolling_pca(returns)
+
+    # 2. one feature table per window: stocks x betas
+    feature_table_by_window = {}
+    for window_end, window_loadings in loadings.groupby("date"):
+        beta_table = window_loadings.pivot(index="ticker", columns="component", values="beta")
+        standardized_beta = (beta_table - beta_table.mean()) / beta_table.std()
+        feature_table_by_window[window_end] = standardized_beta
+
+    # 3. cluster every window
+    labels, stability = cluster_all_windows(feature_table_by_window, config.K_RANGE["a"])
+
+    # 4. build pairs from clusters
+    pairs = build_pairs(labels, feature_table_by_window, "track_a", returns.index)
+
+    # 5. calculate spreads and z-scores from pairs and residuals
+    spreads, zscores = build_spreads(residuals, pairs)
+
+    return factors, meta, residuals, loadings, labels, stability, pairs, spreads, zscores
+
+
 def main() -> None:
     """Build every track-a artifact: python -m src.representation --track a
 
@@ -441,25 +470,7 @@ def main() -> None:
     # FOR TRACK A
 
     returns = pd.read_parquet("data/processed/returns.parquet")
-
-    # 1. rolling PCA
-    factors, meta, residuals, loadings = run_rolling_pca(returns)
-
-    # 2. one feature table per window: stocks x betas
-    feature_table_by_window = {}
-    for window_end, window_loadings in loadings.groupby("date"):
-        beta_table = window_loadings.pivot(index="ticker", columns="component", values="beta")
-        standardized_beta = (beta_table - beta_table.mean()) / beta_table.std()
-        feature_table_by_window[window_end] = standardized_beta
-
-    # 3. cluster every window
-    labels, stability = cluster_all_windows(feature_table_by_window, config.K_RANGE["a"])
-
-    # 4. build pairs from clusters
-    pairs = build_pairs(labels, feature_table_by_window, "track_a", returns.index)
-
-    # 5. calculate spreads and z-scores from pairs and residuals
-    spreads, zscores = build_spreads(residuals, pairs)
+    factors, meta, residuals, loadings, labels, stability, pairs, spreads, zscores = run_track_a(returns)
 
     write_parquet(factors, "data/processed/factors_a.parquet", "factors_a")
     write_parquet(meta, "data/processed/pca_meta.parquet", "pca_meta")
