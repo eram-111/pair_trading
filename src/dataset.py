@@ -607,11 +607,11 @@ def assemble_dataset(track: str) -> pd.DataFrame:
 
 
 def run_tracks(track_text: str) -> None:
-    """Build the dataset for each comma-separated track, e.g. "a" or "a,b,c"."""
+    """Build the dataset for each comma-separated track, e.g. "a" or "a,b"."""
     tracks = [t.strip() for t in track_text.split(",")]
 
     for track in tracks:
-        if track not in ("a", "b", "c"):
+        if track not in ("a", "b"):
             raise ValueError(f"unknown track: {track}")
     if len(tracks) != len(set(tracks)):
         raise ValueError("track names must not repeat")
@@ -622,9 +622,9 @@ def run_tracks(track_text: str) -> None:
 
 
 def main() -> None:
-    """Command-line entry point, e.g. python -m src.dataset_v2 --tracks a,b,c."""
+    """Command-line entry point, e.g. python -m src.dataset_v2 --tracks a,b."""
     parser = argparse.ArgumentParser(description="Build the trigger datasets.")
-    parser.add_argument("--tracks", default="a,b,c", help="comma-separated tracks")
+    parser.add_argument("--tracks", default="a,b", help="comma-separated tracks")
     args = parser.parse_args()
     run_tracks(args.tracks)
 
