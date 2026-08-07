@@ -1434,7 +1434,7 @@ Architecture and training, fixed a priori (unchanged from v1):
 
 **Goal.** Run the FULL pipeline — PCA → residuals → clusters → pairs → z-scores → triggers → all models → engine → metrics — on `make_synthetic` random-walk prices (P3.1's Day-1 fixture generator, reused verbatim, same seed). If the pipeline finds signal in pure noise, we have a leakage bug. Because all four models exist by Day 3 (v2 change), **one run covers E0/E1/E2/E3 at once** — no rerun needed before the freeze.
 
-**Module.** `src/experiments.py`, invoked as `make noise-test` (writes everything under `results/noise/`, seeded 311, never mixed with real artifacts).
+**Module.** `src/noise_test.py` (as-built: split out of `experiments.py` so the runner stays evaluation-only), invoked as `make noise-test` (writes everything under `results/noise/`, seeded 311, never mixed with real artifacts).
 
 **Concrete pass criteria** (evaluated automatically, printed as PASS/FAIL per line). One subtlety first: on random walks the label is *mechanically* related to the features without any leakage — P(|z| halves within 5 days) genuinely falls with |z_trigger| (a 3.5σ excursion must travel farther than a 2.1σ one) and varies with the level-vol/increment-vol ratio, and both quantities are features. So "AUC above 0.5 on noise" is **not** by itself evidence of a bug, and the binding criteria are:
 

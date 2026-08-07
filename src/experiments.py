@@ -1,8 +1,7 @@
 """Runner: turns triggers + a model into decisions, trades, and tables.
 
-Subcommands:
-  grid   python -m src.experiments grid --tracks a,b --models e0,e1,e3 --split trainval
-  noise  python -m src.experiments noise
+Run: python -m src.experiments --tracks a,b --models e0,e1,e3 --split trainval
+(The noise test lives in src/noise_test.py.)
 """
 from __future__ import annotations
 
@@ -32,13 +31,16 @@ def load_tau(model_name: str, track: str) -> float:
 def split_rows(triggers: pd.DataFrame, split: str) -> pd.DataFrame:
     """Rows of one evaluation split.
 
-    split "trainval" -> rows with split in (train, val); "test" -> test
+    split "trainval" -> rows with split in (train, val); "val" -> val
+    rows only (the clean pre-test model comparison); "test" -> test
     rows. purged/embargo rows are never traded.
     """
-    assert split in ("trainval", "test"), f"unknown split '{split}'"
+    assert split in ("trainval", "val", "test"), f"unknown split '{split}'"
 
     if split == "trainval":
         wanted = ("train", "val")
+    elif split == "val":
+        wanted = ("val",)
     else:
         wanted = ("test",)
 
@@ -70,22 +72,22 @@ def run_cell(track: str, model_name: str, split: str) -> pd.DataFrame:
     zscores = read_parquet(f"data/spreads/zscores_{track}.parquet")
     prices = read_parquet("data/raw/prices.parquet")
 
-    rows = split_rows(triggers, split)
+    valid_trigger_rows = split_rows(triggers, split)
 
     if model_name == "e0":
-        decisions = e0_decisions(rows)
+        decisions = e0_decisions(valid_trigger_rows)
     else:
         model = EntryModel.load(f"results/frozen/{model_name}_{track}.joblib")
         tau = load_tau(model_name, track)
-        decisions = model_decisions(model, rows, tau)
+        decisions = model_decisions(model, valid_trigger_rows, tau)
 
-    trades = run_backtest(zscores, prices, rows, decisions)
+    trades = run_backtest(zscores, prices, valid_trigger_rows, decisions)
 
     write_parquet(decisions, f"results/decisions_{track}_{model_name}_{split}.parquet", "decisions")
     write_parquet(trades, f"results/trades_{track}_{model_name}_{split}.parquet", "trades")
 
     entered = int(decisions["enter"].sum())
-    print(f"{track} x {model_name} ({split}): {len(rows)} triggers, {entered} entered, {len(trades)} trades")
+    print(f"{track} x {model_name} ({split}): {len(valid_trigger_rows)} triggers, {entered} entered, {len(trades)} trades")
     return trades
 
 
@@ -109,46 +111,84 @@ def make_grid_table(tracks: list, models: list, split: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def run_noise_test() -> None:
-    """Full pipeline on synthetic random-walk prices; everything under
-    results/noise/, ending in PASS_FAIL.md.
+def select_tau(model: EntryModel, track: str) -> tuple[float, pd.DataFrame]:
+    """Apply the pre-registered tau rule for one (model, track) cell.
 
-    Criteria, one printed line each:
-      1. every model's mean net return at 10 bps is <= 0, or its CI covers 0
-      2. no model's AUC beats an abs-z-only logistic baseline (CI of the
-         AUC difference covers 0); raw AUC vs 0.5 printed as advisory only
-      3. > 50 triggers fired and the label base rate is strictly inside (0, 1)
-    Any FAIL means a leakage bug: stop and find it before trusting results.
+    On VALIDATION rows only: for each tau in 0.40, 0.45, ... 0.80,
+    build decisions (enter = p_hat >= tau), run the engine, record
+    n_trades and total net P&L at the headline cost. Then pick:
+      1. among taus with >= 25 trades: max net P&L; P&L ties (within
+         1e-6) go to the HIGHER tau (trade less when indifferent)
+      2. if no tau reaches 25 trades: the tau with the most trades
+         (ties to the higher tau)
+      3. if that maximum is 0 trades: degenerate cell, tau = 0.5
+         (record it in DECISIONS.md)
+    Returns (tau, table of tau / n_trades / net_pnl). The caller writes
+    tau into results/frozen/taus.json.
     """
-    raise NotImplementedError
+    potential_taus = [0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80]
+    net_col = f"net_ret_{config.HEADLINE_COST_BPS}bps"
+
+    triggers = read_parquet(f"data/datasets/triggers_{track}.parquet")
+    zscores = read_parquet(f"data/spreads/zscores_{track}.parquet")
+    prices = read_parquet("data/raw/prices.parquet")
+
+    val_trigger_mask = triggers["split"] == "val"
+    val = triggers[val_trigger_mask]
+
+    tau_rows = []
+    for tau in potential_taus:
+        decisions = model_decisions(model, val, tau)
+        trades = run_backtest(zscores, prices, val, decisions)
+        net_pnl = trades[net_col].sum()
+        tau_rows.append({"tau": tau, "n_trades": len(trades), "net_pnl": net_pnl})
+    tau_table = pd.DataFrame(tau_rows)
+
+    # best net P&L among taus with more than 25 trades
+    chosen = None
+    best_pnl = float("-inf")
+    for row in tau_rows:
+        if row["n_trades"] < 25:
+            continue
+        if row["net_pnl"] > best_pnl + 1e-6:
+            best_pnl = row["net_pnl"]
+            chosen = row["tau"]
+        elif row["net_pnl"] > best_pnl - 1e-6:
+            # taking highest tau if within 1e-6 of best_pnl
+            chosen = row["tau"]
+
+    # if tau reached 25 trades, tau with most trades is chosen
+    if not chosen:
+        best_trades = 0
+        for row in tau_rows:
+            if row["n_trades"] >= best_trades > 0:
+                best_trades = row["n_trades"]
+                chosen = row["tau"]
+
+    # 0 trades
+    if not chosen:
+        chosen = 0.5
+        print(f"select_tau: ({model.name}, track {track}): 0 trades at every tau; tau = 0.5")
+
+    print(f"select_tau: {model.name} track {track}: tau = {chosen}")
+    return chosen, tau_table
 
 
 def main() -> None:
-    """Parse the subcommand and run it.
+    """Run run_cell for every (track, model), then write the grid table.
 
-    grid: run_cell for every (track, model); a model whose frozen file
-    does not exist yet is skipped with a printed line, so the grid can
-    run before every model has landed. A track with no triggers file
-    yet is skipped the same way. Then make_grid_table ->
-    results/tables/grid_{split}.csv.
-    noise: run_noise_test.
+    A model whose frozen file does not exist yet is skipped with a
+    printed line, so the grid can run before every model has landed.
+    A track with no triggers file yet is skipped the same way. Then
+    make_grid_table -> results/tables/grid_{split}.csv.
     """
     parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(dest="arg1", required=True)
-
-    grid_parser = subparsers.add_parser("grid")
-    grid_parser.add_argument("--tracks", default="a,b")
-    grid_parser.add_argument("--models", default="e0,e1,e3")
-    grid_parser.add_argument("--split", default="trainval")
-
-    subparsers.add_parser("noise")
+    parser.add_argument("--tracks", default="a,b")
+    parser.add_argument("--models", default="e0,e1,e3")
+    parser.add_argument("--split", default="trainval")
 
     args = parser.parse_args()
     seed_everything()
-
-    if args.arg1 == "noise":
-        run_noise_test()
-        return
 
     tracks = args.tracks.split(",")
     models = args.models.split(",")
