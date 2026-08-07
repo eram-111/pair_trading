@@ -28,10 +28,9 @@ def get_universe() -> pd.DataFrame:
 
 def download_prices(tickers: list[str], start_date: str = config.DOWNLOAD_START, end_date: str = config.DATA_END,
                     cache_dir: str = "data/raw/cache") -> tuple[pd.DataFrame, pd.DataFrame]:
-    """yfinance pull, auto_adjust=True asserted explicitly (do not trust the default
-    silently). Raw per-ticker CSVs cached and committed, so the pull is
-    reproducible even if yfinance data shifts later. No retry logic: the one
-    attended pull is simply rerun if it fails.
+    """yfinance pull, auto_adjust=True passed explicitly (not left to the
+    default). Raw per-ticker CSVs cached and committed, so the pull is
+    reproducible even if yfinance data shifts later. 
     Returns (prices, volume), date x ticker.""" 
     data = yf.download(tickers, start=start_date, end=end_date, auto_adjust=True)
     closing_prices = data["Close"][tickers]
@@ -116,10 +115,7 @@ def compute_returns(prices: pd.DataFrame) -> pd.DataFrame:
     """Daily LOG returns: ln(p_t / p_{t-1}), one column per ticker.
 
     Log, not simple, per config.LOG_RETURNS: log returns add up over
-    time, which the PCA/statistics substrate relies on. The engine
-    separately computes SIMPLE returns from prices for P&L (money and
-    statistics deliberately use different return definitions — do not
-    unify them). The first row (no previous day) is dropped.
+    time, which the PCA math relies on. The first row is dropped.
     """
 
     prices_shifted_forward = prices.shift(1)

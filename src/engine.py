@@ -1,19 +1,16 @@
-"""Backtest engine: turns entry decisions into a transaction log of completed trades.
+"""Backtest engine: turns entry decisions into a ledger of completed trades.
 
-According to then decisions table, the engine replays each accepted trade
-day by day under the same fixed rules and returns one ledger per trade.
-
-The rules:
-- If there is a trigger, enter the trade the next trading day (at the close of trigger trading day) (t+1).
-- Direction from the sign of z at trigger: if z > 0, then short stock_a,
-  long stock_b, Else if z < 0 then the reverse. $1 per leg.
+For each trigger the decisions table accepts, the engine replays the
+trade day by day under the same fixed rules:
+- Enter at the close of the trading day after the trigger day (t+1).
+- Direction from the sign of z at trigger: z > 0 -> short stock_a,
+  long stock_b; z < 0 -> the reverse. $1 per leg.
 - Exit at the first close with |z| < 0.5 ("reverted"), else at the
   close 5 trading days after entry ("timeout").
-- P&L from raw simple returns of the two legs: gross_ret = sum of
-  daily (long return - short return) over the holding days.
-- Costs: Transactional cost of taking the trade. c basis points per leg per transaction = 4c per round trip,
+- gross_ret = sum of daily (long return - short return) over the
+  holding days, from simple returns.
+- Costs: c basis points per leg per transaction = 4c per round trip,
   precomputed as one net_ret_{c}bps column per value in the cost grid.
-
 """
 from __future__ import annotations
 
@@ -64,7 +61,7 @@ def run_backtest(zscores: pd.DataFrame, prices: pd.DataFrame, triggers: pd.DataF
     for index, row in decisions.iterrows():
         decision_dict[row["trigger_id"]] = row["enter"]
 
-    last_day = len(zscores.index) - 1 # last day
+    last_day = len(zscores.index) - 1
     ledger_rows = []
     dropped = 0
 
@@ -160,13 +157,13 @@ def daily_strategy_returns(trades: pd.DataFrame, prices: pd.DataFrame, triggers:
     z_trigger does, via _split_stocks).
     """
     returns = _simple_ret(prices)
-    cost_per_transaction = 2 * cost_bps * 0.0001 # 2 stocks
+    cost_per_transaction = 2 * cost_bps * 0.0001
 
     z_trigger_dict = {}
     for index, row in triggers.iterrows():
         z_trigger_dict[row["trigger_id"]] = row["z_trigger"]
 
-    # All per-trade P&L values per day in list
+    # each day's list of open-trade P&L values
     pnl_lists_dict = {}
     for date in prices.index:
         pnl_lists_dict[date] = []

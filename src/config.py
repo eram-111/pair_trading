@@ -29,7 +29,7 @@ EIGENVECTOR_SIGN_RULE: str = "sum_of_loadings_positive"  # applied every window
 BETA_WINDOW: int = 252          # OLS of returns on factors, same trailing window, applied OOS at t
 
 # ----------------------------------------------------------------- Steps 4/4B (clustering)
-RECLUSTER_EVERY: int = 21       # trading days, tracks a/c, trailing 252d formation window
+RECLUSTER_EVERY: int = 21       # trading days, trailing 252d formation window
 TRACK_B_REFRESH: str = "quarterly"
 KMEANS_N_INIT: int = 10         # k-means++ init; k by max silhouette, formation window ONLY
 K_RANGE: dict[str, range] = {
@@ -43,7 +43,7 @@ SUBGROUP_SIZES: tuple[int, int] = (2, 3)
 # ----------------------------------------------------------------- Step 6 (spread / z)
 SPREAD_KIND: str = "simple"     # spread_t = cumsum over the pair's RUN of (resid_A - resid_B)
 Z_WINDOW: int = 60              # trailing rolling mean/std, window-local
-SPREAD_POLICY: str = "carry_with_burnin"  # runs tile across recluster windows; see Section 3
+SPREAD_POLICY: str = "carry_with_burnin"  # runs tile across recluster windows
 SPREAD_WARMUP_DAYS: int = 60    # backward-looking burn-in before each run's active_from
 
 # ----------------------------------------------------------------- Step 7 (triggers / labels)
@@ -69,13 +69,11 @@ PURGE_DAYS: int = 5             # drop last 5 trading days of labels before each
 EMBARGO_DAYS: int = 10          # further trading days dropped after each boundary
 
 # ----------------------------------------------------------------- Step 9 (models)
-# NOTE: tau lives in results/frozen/taus.json (sole authority, written by each model's
-# owner on Day 3 evening via the one pre-registered rule in Section 5) — deliberately
-# NOT in this file, so config can never disagree with what the runner actually reads.
-                                     # each set Day 3 evening by that model's owner via the ONE
-TAU_RULE: str = "see-plan-sec-5"  # the ONE pre-registered rule lives in Plan Section 5 (P3.6)
-                                     # never touched on test
-E3_HIDDEN: tuple[int, ...] = (16,)   # small MLP; details in Section 5 (Slice P3)
+# NOTE: tau lives in results/frozen/taus.json (sole authority, written by each
+# model's owner via the one pre-registered rule) — deliberately NOT in this
+# file, so config can never disagree with what the runner actually reads.
+TAU_RULE: str = "see-DECISIONS.md"   # the one pre-registered rule, recorded there; never touched on test
+E3_HIDDEN: tuple[int, ...] = (16,)   # small MLP hidden layer
 TORCH_DEVICE: str = "cpu"            # NEVER autodetect cuda — reproducibility requires same-device compute everywhere
 
 # ----------------------------------------------------------------- Step 11 (execution / costs)
@@ -86,9 +84,8 @@ NOTIONAL_PER_LEG: float = 1.0   # long lagging / short leading leg by sign of z
 COST_GRID_BPS: tuple[int, ...] = (0, 5, 10, 15, 20, 30, 40, 50)  # per leg per transaction
 HEADLINE_COST_BPS: int = 10
 
-# ----------------------------------------------------------------- Track C (committed in v2)
-PARTIAL_CORR_SHRINKAGE: float = 1e-3   # ridge; in-window only (leakage item 11)
-# (Track D constants AE_BOTTLENECK / AE_RETRAIN_EVERY removed in v2 — Track D is cut)
+# ----------------------------------------------------------------- Track C (cut; constant kept for the record)
+PARTIAL_CORR_SHRINKAGE: float = 1e-3   # ridge shrinkage, in-window only
 
 # ----------------------------------------------------------------- pre-registration
 PRIMARY_COMPARISON: tuple[str, str] = ("track_a__e1", "track_a__e0")

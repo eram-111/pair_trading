@@ -42,7 +42,7 @@ class EntryModel:
         """Fit scaler on train rows, then _fit_scaled. Returns self."""
         features = X_train[list(config.FEATURES)]
         self.scaler = StandardScaler()
-        X_standardized = self.scaler.fit_transform(features)  # standardizing the features
+        X_standardized = self.scaler.fit_transform(features)
         self._fit_scaled(X_standardized, y_train)
         return self
 
@@ -50,7 +50,7 @@ class EntryModel:
         """Return the predicted probability of (label=1) for each row using the fitted training scaler."""
         assert self.scaler is not None, "Model must be fitted with fit() before predict_proba()"
         features = X[list(config.FEATURES)]
-        X_standardized = self.scaler.transform(features)  # standardizing the features
+        X_standardized = self.scaler.transform(features)
         return self._predict_scaled(X_standardized)
 
     def save(self, path: Path | str) -> None:

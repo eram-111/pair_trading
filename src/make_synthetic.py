@@ -41,9 +41,9 @@ def make_synthetic(n_tickers: int = 40, start: str = "2014-01-01", end: str = "2
 
     prices = {}
     for ticker in tickers:
-        valotility = num_generator.uniform(0.008, 0.025)
+        volatility = num_generator.uniform(0.008, 0.025)
         starting_price = np.log(num_generator.uniform(20, 500))
-        returns  = num_generator.normal(0, valotility, size=n_days)
+        returns  = num_generator.normal(0, volatility, size=n_days)
         returns [0] = 0 
         cum_returns = np.cumsum(returns)
         log_price = np.array([starting_price] * n_days) + cum_returns

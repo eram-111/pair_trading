@@ -1,6 +1,5 @@
-"""Market structure from returns: rolling PCA, out-of-sample residuals,
-clustering, pair building, and spread/z-scores — the whole
-returns -> zscores chain in one file.
+"""The whole returns -> zscores chain: rolling PCA, out-of-sample
+residuals, clustering, pair building, spreads and z-scores.
 """
 from __future__ import annotations
 
@@ -20,18 +19,14 @@ from src.contracts import read_parquet, seed_everything, validate_artifact, writ
 def pca_one_window(window_returns: pd.DataFrame) -> tuple[np.ndarray, int, float, np.ndarray]:
     """PCA of one window of returns (date x ticker).
 
-    window_returns must contain only PAST days relative to any day the
-    outputs will be applied to — never that day itself (that would leak
-    it into its own factors).
+    Pass only PAST days — never the day the outputs will be used on.
 
     Returns (weights, n_components, cum_var, corr):
-      weights: 40 x 5 eigenportfolio columns, biggest first, each column
-               sign-fixed so its weights sum positive (consistent
-               orientation across windows).
-      n_components: smallest m in (3, 4, 5) explaining >= 60% of
-               variance, else 5.
+      weights: 40 x 5 eigenportfolio columns, biggest first, each
+               column sign-fixed to sum positive.
+      n_components: smallest m in (3, 4, 5) with cum var >= 60%, else 5.
       cum_var: variance fraction those m components explain.
-      corr: the window's 40 x 40 correlation matrix (Track C option).
+      corr: the window's correlation matrix.
     """
     n_component_candidates = config.N_COMPONENTS_CANDIDATES
 
@@ -39,7 +34,7 @@ def pca_one_window(window_returns: pd.DataFrame) -> tuple[np.ndarray, int, float
 
     eigenvalues, eigenvectors = np.linalg.eigh(corr_matrix)
 
-    # Sort in biggest to smallest eigenvalue order
+    # biggest eigenvalue first
     order = np.argsort(eigenvalues)[::-1]
     eigenvalues = eigenvalues[order]
     eigenvectors = eigenvectors[:, order]
@@ -47,16 +42,16 @@ def pca_one_window(window_returns: pd.DataFrame) -> tuple[np.ndarray, int, float
     columns_to_keep = max(n_component_candidates)  # always carry 5 columns 
     top_component_weights = eigenvectors[:, :columns_to_keep].copy()
 
-    # fliping columns whose weights sum negative
+    # flip columns whose weights sum negative
     for column in range(columns_to_keep):
         current_column_weights  = top_component_weights[:, column]
         if current_column_weights.sum() < 0:
             top_component_weights[:, column] = -top_component_weights[:, column]
 
-    # cumulative fraction of total variance explained
+    # cumulative variance fraction
     cum_vars = np.cumsum(eigenvalues) / eigenvalues.sum()
 
-    # smallest candidate m that is bigger than the target
+    # smallest m reaching the target
     n_components = max(n_component_candidates)
     for m in n_component_candidates:
         if cum_vars[m - 1] >= config.VAR_EXPLAINED_TARGET:
@@ -73,10 +68,9 @@ def run_rolling_pca(returns: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, 
     Returns (factors, meta, residuals, loadings):
       factors:   date x pc_1..pc_5, daily factor returns
       meta:      date x (n_components, cum_var_explained)
-      residuals: date x ticker — return minus what the factors explain
-      loadings:  long table, written every 21st day: loading + beta per
-                 stock per component (always all 5, so the clustering
-                 vectors have equal length)
+      residuals: date x ticker, return minus what the factors explain
+      loadings:  long table, every 21st day: loading + beta per stock
+                 per component (always all 5, for equal-length vectors)
     """
     n_days = len(returns.index)
     tickers = list(returns.columns)
@@ -165,10 +159,10 @@ def fit_kmeans_select_k(X: np.ndarray, k_range: range, seed: int = config.SEED) 
 
 
 def pair_from_labels(labels: np.ndarray, tickers: list) -> set:
-    """All (first, second) ticker pairs sharing a cluster, alphabetical.
+    """All ticker pairs sharing a cluster, tuples alphabetical.
 
-    Cluster numbers mean nothing across windows (k-means relabels
-    freely); "these two are together" is the only comparable fact.
+    Cluster numbers are not comparable across windows; shared
+    membership is.
     """
     pairs = set()
     for i in range(len(tickers)):
@@ -193,9 +187,8 @@ def cluster_all_windows(feature_table_by_window: dict, k_range: range) -> tuple[
     """Cluster every window, in date order. Returns (labels, stability).
 
     feature_table_by_window: {window_end -> DataFrame, one row per
-    ticker (the index), one column per feature}. Track a passes beta
-    tables; track b passes characteristics tables. The caller
-    standardizes the features first if they need it.
+    ticker (the index), one column per feature}. Standardize the
+    features before calling if needed.
     """
     label_rows = []
     stability_tables = []    # one small table per window; glued at the end
@@ -215,7 +208,7 @@ def cluster_all_windows(feature_table_by_window: dict, k_range: range) -> tuple[
             row = {"window_end": window_end_date, "ticker": ticker, "cluster_id": cluster_id}
             label_rows.append(row)
 
-        # this window's pairs, compared against the previous window's pair
+        # compare this window's pairs with the previous window's
         curr_pairs = pair_from_labels(labels, tickers)
         stab_table = pair_stability_table(prev_pairs, curr_pairs, window_end_date)
         stability_tables.append(stab_table)
@@ -236,10 +229,9 @@ def _distance(point_a: np.ndarray, point_b: np.ndarray) -> float:
 def split_large_cluster(members: list, features: pd.DataFrame) -> list:
     """Split a cluster of 5+ members into subgroups of 2-3.
 
-    Greedy nearest-neighbour on the members' feature rows (Euclidean):
-    repeatedly pull out the closest remaining couple; a final odd
-    leftover joins the couple holding its nearest member, making one
-    group of 3. Returns a list of subgroups (each 2-3 tickers).
+    Repeatedly pull out the closest couple (Euclidean on feature
+    rows); an odd leftover joins the couple with its nearest member.
+    Returns a list of subgroups.
     """
     remaining = list(members)
     subgroups = []
@@ -280,16 +272,12 @@ def build_pairs(labels: pd.DataFrame, feature_table_by_window: dict, source: str
                 calendar: pd.DatetimeIndex) -> pd.DataFrame:
     """Turn every window's clusters into the tradeable pairs table.
 
-    Per window, per cluster: 1 member -> dropped; 2-4 members -> every
-    pair; 5+ members -> split_large_cluster first, then every pair
-    inside each subgroup. Every pair gets:
-      active_from = first trading day AFTER window_end
-      active_to   = the next window's window_end (or the last calendar
-                    day for the final window)
-    so consecutive windows tile with no gap — the spread builder and
-    the trigger detector both rely on that.
-    Returns the "pairs" schema table (caller writes it with
-    write_validated_csv).
+    Per cluster: 1 member -> dropped; 2-4 -> every pair; 5+ -> split
+    first, then every pair inside each subgroup. Every pair gets:
+      active_from = first calendar day after window_end
+      active_to   = next window_end (last calendar day for the final
+                    window)
+    so consecutive windows tile with no gap. Returns the "pairs" table.
     """
     window_end_dates = sorted(labels["window_end"].unique())
     pair_rows = []
@@ -346,15 +334,14 @@ def build_pairs(labels: pd.DataFrame, feature_table_by_window: dict, source: str
 def build_spreads(residuals: pd.DataFrame, pairs: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Spread and z-score day-series for every pair. Returns (spreads, zscores).
 
-    Per pair_id: group its rows into RUNS — stretches of consecutive
-    active windows that tile without a gap. Within a run:
-      spread = running sum of (residual_first - residual_second),
-               starting 60 trading days BEFORE the run's active_from
-               (backward-looking burn-in: already-written history, no
-               leak) so the z-score is valid from the first active day
+    Per pair_id, group its windows into runs (consecutive windows, no
+    gap). Within a run:
+      spread = running sum of (residual_a - residual_b), started 60
+               trading days before the run (backward burn-in, past
+               data only) so z is valid from the first active day
       z = (spread - rolling 60d mean) / rolling 60d std
-    Output frames are date x pair_id; values only on days inside active
-    windows — burn-in days stay internal and are never written.
+    Output is date x pair_id; values only on active days, burn-in
+    days are never written.
     """
     dates = residuals.index
     spread_series = {}   # pair_id -> its finished day-series
@@ -416,18 +403,15 @@ def build_spreads(residuals: pd.DataFrame, pairs: pd.DataFrame) -> tuple[pd.Data
 def main() -> None:
     """Build every track-a artifact: python -m src.representation --track a
 
-    The whole chain, each output feeding the next, every artifact
-    written through the schema-checked writers:
-      returns -> run_rolling_pca -> factors, meta, residuals, loadings
-      loadings -> pivot + standardize per window -> features_by_window
-      features_by_window -> cluster_all_windows -> labels, stability
-      labels + features -> build_pairs -> pairs_a.csv
-      residuals + pairs -> build_spreads -> spreads_a, zscores_a
+    The chain, every artifact written through the schema-checked
+    writers:
+      returns -> rolling PCA -> factors, meta, residuals, loadings
+      loadings -> per-window beta tables -> clustering -> pairs
+      residuals + pairs -> spreads, z-scores
 
-    --track b runs only the last step: P2's characteristics flow already
-    built pairs_b.csv (through the shared clustering + pair-builder), so
-    here we read pairs_b.csv + residuals_a and write spreads_b, zscores_b.
-    Both tracks trade the same residual spreads — only the grouping differs.
+    --track b runs only the last step: read pairs_b.csv (built by the
+    characteristics flow) + residuals_a, write spreads_b and zscores_b.
+    Both tracks trade the same residual spreads.
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--track", default="a")
