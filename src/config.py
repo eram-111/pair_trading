@@ -73,7 +73,7 @@ EMBARGO_DAYS: int = 10          # further trading days dropped after each bounda
 # model's owner via the one pre-registered rule) — deliberately NOT in this
 # file, so config can never disagree with what the runner actually reads.
 TAU_RULE: str = "see-DECISIONS.md"   # the one pre-registered rule, recorded there; never touched on test
-E3_HIDDEN: tuple[int, ...] = (16,)   # small MLP hidden layer
+E3_HIDDEN: tuple[int, ...] = (8, 16)   # hidden-size grid tried in E3's tune
 TORCH_DEVICE: str = "cpu"            # NEVER autodetect cuda — reproducibility requires same-device compute everywhere
 
 # ----------------------------------------------------------------- Step 11 (execution / costs)
