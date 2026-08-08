@@ -1,8 +1,14 @@
 """Metrics for finished ledgers: summary stats, bootstrap CIs,
 classification quality, calibration. Reads written files and prices;
 never reruns run_backtest.
+
+Run: python -m src.metrics --split test   prints and writes the
+results-table spine (n_trades, mean net + CI, AUC per cell).
 """
 from __future__ import annotations
+
+import argparse
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -30,7 +36,18 @@ def bootstrap_ci(values, stat_fn, n_boot: int = 1000, seed: int = config.SEED) -
     bootstrap would be more faithful but is out of scope — CIs are
     therefore optimistic lower bounds on width.
     """
-    raise NotImplementedError
+    values = np.asarray(values)
+    point = float(stat_fn(values))
+
+    rng = np.random.default_rng(seed)
+    stats = []
+    for draw in range(n_boot):
+        sample = values[rng.integers(0, len(values), size=len(values))]
+        stats.append(stat_fn(sample))
+
+    low = float(np.percentile(stats, 2.5))
+    high = float(np.percentile(stats, 97.5))
+    return point, low, high
 
 
 def sharpe_from_daily(daily_returns: pd.Series) -> float:
@@ -74,3 +91,62 @@ def strategy_report(track: str, model_name: str, split: str) -> dict:
     drawdown (sliced to the split's window before use).
     """
     raise NotImplementedError
+
+
+def report_numbers(tracks: list, models: list, split: str) -> pd.DataFrame:
+    """The results-table spine: one row per (track, model) cell that
+    has written files.
+
+    Per cell: n_trades, mean net at the headline cost with its 95%
+    bootstrap CI, and AUC of p_hat against the labels (NaN for e0 —
+    all-NaN p_hat has no AUC). AUC uses every decided trigger in the
+    split, entered or not: it scores the classifier, not the trades.
+    """
+    net_col = f"net_ret_{config.HEADLINE_COST_BPS}bps"
+
+    rows = []
+    for track in tracks:
+        triggers_file = Path(f"data/datasets/triggers_{track}.parquet")
+        if not triggers_file.exists():
+            continue
+        triggers = read_parquet(triggers_file)
+        label_by_trigger_id = triggers.set_index("trigger_id")["label"]
+
+        for model_name in models:
+            trades_file = Path(f"results/trades_{track}_{model_name}_{split}.parquet")
+            decisions_file = Path(f"results/decisions_{track}_{model_name}_{split}.parquet")
+            if not trades_file.exists():
+                continue
+            trades = read_parquet(trades_file)
+            decisions = read_parquet(decisions_file)
+
+            mean_net, ci_low, ci_high = bootstrap_ci(trades[net_col], np.mean)
+
+            auc = float("nan")
+            has_predictions = decisions["p_hat"].notna().any()
+            if has_predictions:
+                y_true = label_by_trigger_id.loc[decisions["trigger_id"]].values
+                y_predicted =decisions["p_hat"].values
+                auc = roc_auc_score(y_true, y_predicted)
+
+            rows.append({"track": track, "model": model_name, "split": split, "n_trades": len(trades), "mean_net": mean_net, "ci_low": ci_low, "ci_high": ci_high, "auc": auc})
+    return pd.DataFrame(rows)
+
+
+def main() -> None:
+    """Write + print the report table for one split."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--tracks", default="a,b")
+    parser.add_argument("--models", default="e0,e1,e3")
+    parser.add_argument("--split", default="test")
+    args = parser.parse_args()
+
+    table = report_numbers(args.tracks.split(","), args.models.split(","), args.split)
+
+    Path("results/tables").mkdir(parents=True, exist_ok=True)
+    table.to_csv(f"results/tables/report_numbers_{args.split}.csv", index=False)
+    print(table.to_string(index=False))
+
+
+if __name__ == "__main__":
+    main()

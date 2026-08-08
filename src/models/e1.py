@@ -1,14 +1,8 @@
 """E1: L2 logistic regression behind the EntryModel interface.
 
-python -m src.models.e1 --track a   fits, tunes, freezes
-results/frozen/e1_{track}.joblib and records its tau in
-results/frozen/taus.json.
+Trained and frozen by the runner: python -m src.train --model e1 --track a
 """
 from __future__ import annotations
-
-import argparse
-import json
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -16,9 +10,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 
 from src import config
-from src.contracts import read_parquet, seed_everything
-from src.experiments import select_tau
-from src.models.common import EntryModel, sha256_of_file, verify_load
+from src.models.common import EntryModel
 
 
 class E1(EntryModel):
@@ -78,47 +70,3 @@ class E1(EntryModel):
         coefs = self.model.coef_[0]
         result = pd.DataFrame({"feature": features,"coefficient": coefs})
         return result
-        
-
-def main() -> None:
-    """Fit and tune and freeze e1 for one track"""
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--track", choices=["a", "b"], required=True)
-    args = parser.parse_args()
-    track = args.track
-
-    seed_everything()
-
-    triggers = read_parquet(f"data/datasets/triggers_{track}.parquet")
-    train = triggers[triggers["split"] == "train"]
-    val = triggers[triggers["split"] == "val"]
-
-    model = E1()
-    model.fit(train, train["label"])
-    tuning_result = model.tune(val, val["label"])
-    print(f"e1 track {track}: {tuning_result}")
-
-    tau, tau_table = select_tau(model, track)
-    print(tau_table.to_string(index=False))
-
-    model_path = Path(f"results/frozen/e1_{track}.joblib")
-    model.save(model_path)
-    verify_load(model_path, val, model.predict_proba(val))
-
-    taus_path = Path("results/frozen/taus.json")
-    taus = {}
-    if taus_path.exists():
-        taus = json.loads(taus_path.read_text())
-    taus[f"e1_{track}"] = tau
-    taus_path.write_text(json.dumps(taus, indent=2) + "\n")
-
-    coefs_path = Path(f"results/tables/e1_coefficients_{track}.csv")
-    coefs_path.parent.mkdir(parents=True, exist_ok=True)
-    model.coefficient_table().to_csv(coefs_path, index=False)
-
-    print(f"model saved to {model_path}")
-    print(f"model sha256: {sha256_of_file(model_path)}")
-
-
-if __name__ == "__main__":
-    main()
