@@ -14,3 +14,4 @@ results/*
 !results/figures/
 results/figures/*
 !results/figures/final/
+output/
