@@ -6,6 +6,7 @@ __pycache__/
 .vscode
 *.pdf
 sync.txt
+dataset_old.py
 
 # results are regenerable; only the frozen finals are committed
 results/*
