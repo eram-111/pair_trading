@@ -24,7 +24,8 @@ models:          ## fit + tune + freeze each model x track: writes results/froze
 	python -m src.train --model e3 --track b
 grid:            ## E0..E3 x tracks on train+val only; evaluates what exists, rebuilds nothing
 	python -m src.experiments --tracks a,b --models e0,e1,e2,e3 --split trainval
-metrics:         ## the full analysis battery on the VAL split: report table, controls, breakevens, all figures
+metrics:         ## produce + analyze the VAL split: cells, report table, controls, breakevens, all figures
+	python -m src.experiments --tracks a,b --models e0,e1,e2,e3 --split val
 	python -m src.metrics --tracks a,b --split val
 	python -m src.analysis
 noise-test:      ## full pipeline on src/make_synthetic.py output; PASS/FAIL criteria
