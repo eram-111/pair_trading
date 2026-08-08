@@ -36,6 +36,11 @@ def _learned_model_classes() -> dict:
     except Exception:
         pass
     try:
+        from src.models.e2 import E2
+        classes["e2"] = E2
+    except Exception:
+        pass
+    try:
         from src.models.e3 import E3
         classes["e3"] = E3
     except Exception:

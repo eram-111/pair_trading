@@ -120,7 +120,10 @@ def report_numbers(tracks: list, models: list, split: str) -> pd.DataFrame:
             trades = read_parquet(trades_file)
             decisions = read_parquet(decisions_file)
 
-            mean_net, ci_low, ci_high = bootstrap_ci(trades[net_col], np.mean)
+            if len(trades) == 0:
+                mean_net, ci_low, ci_high = float("nan"), float("nan"), float("nan")
+            else:
+                mean_net, ci_low, ci_high = bootstrap_ci(trades[net_col], np.mean)
 
             auc = float("nan")
             has_predictions = decisions["p_hat"].notna().any()
@@ -137,7 +140,7 @@ def main() -> None:
     """Write + print the report table for one split."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--tracks", default="a,b")
-    parser.add_argument("--models", default="e0,e1,e3")
+    parser.add_argument("--models", default="e0,e1,e2,e3")
     parser.add_argument("--split", default="test")
     args = parser.parse_args()
 

@@ -9,6 +9,7 @@ import argparse
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from src import config
@@ -174,6 +175,92 @@ def select_tau(model: EntryModel, track: str) -> tuple[float, pd.DataFrame]:
     return chosen, tau_table
 
 
+def matched_control_decisions(model_decisions: pd.DataFrame, triggers: pd.DataFrame, seed: int) -> pd.DataFrame:
+    """One random strategy with the model's exact footprint.
+
+    Per calendar quarter: count how many triggers the model entered,
+    then pick that many of the quarter's triggers uniformly at random
+    (without replacement). Matching per quarter copies the model's
+    temporal footprint, so the only difference left is WHICH triggers
+    were chosen — the skill question. Returns a decisions table:
+    enter=True for the picks, False otherwise, p_hat=NaN. The rng is
+    seeded with config.SEED + seed, so draw i is reproducible.
+    """
+    rng = np.random.default_rng(config.SEED + seed)
+
+    merged = model_decisions.merge(triggers[["trigger_id", "trigger_date"]],on="trigger_id")
+    merged["quarter"] = merged["trigger_date"].dt.to_period("Q")
+
+    picked = []
+
+    for i, row in merged.groupby("quarter"):
+        entered_trades = row["enter"]
+        n_entered = entered_trades.sum()
+        if n_entered == 0:
+            continue
+        picks = rng.choice(row["trigger_id"], size=n_entered, replace=False)
+        picked.extend(picks)
+
+    decisions = model_decisions[["trigger_id"]].copy()
+    decisions["enter"] = decisions["trigger_id"].isin(picked)
+    decisions["p_hat"] = float("nan")
+    validate_artifact(decisions, "decisions")
+    return decisions
+
+
+def run_control(track: str, model_name: str, split: str, n_seeds: int = 1000) -> dict:
+    """The turnover-matched control for one grid cell.
+
+    The e0 ledger holds one completed trade for EVERY trigger (e0
+    enters everything), so both the model and each random strategy are
+    scored by looking their entered ids up there — same scoring for
+    all, no engine reruns. percentile = share of the n_seeds random
+    strategies whose mean net the model beats. Writes and returns
+    results/control_{track}_{model}_{split}.json.
+    """
+    net_col = f"net_ret_{config.HEADLINE_COST_BPS}bps"
+
+    triggers = read_parquet(f"data/datasets/triggers_{track}.parquet")
+    model_decisions_table = read_parquet(f"results/decisions_{track}_{model_name}_{split}.parquet")
+    e0_trades = read_parquet(f"results/trades_{track}_e0_{split}.parquet")
+
+    net_by_trigger_id = e0_trades.set_index("trigger_id")[net_col]
+
+    all_ids_known = model_decisions_table["trigger_id"].isin(net_by_trigger_id.index).all()
+
+    assert all_ids_known, "e0 ledger is missing triggers: run the e0 cell for this split first"
+
+    entered = model_decisions_table[model_decisions_table["enter"]]
+    if len(entered) == 0:
+        print(f"{track} {model_name}: entered no trades (degenerate cell) — control skipped")
+        return {}
+
+    model_returns = net_by_trigger_id.loc[entered["trigger_id"]]
+    model_mean_net = float(model_returns.mean())
+
+    control_means = []
+
+    for seed in range(n_seeds):
+        control = matched_control_decisions(model_decisions_table, triggers, seed)
+        picks = control[control["enter"]]
+        control_returns = net_by_trigger_id.loc[picks["trigger_id"]]
+        control_mean = float(control_returns.mean())
+        control_means.append(control_mean)
+
+    control_means = np.array(control_means)
+
+    beaten = int((control_means < model_mean_net).sum())
+    percentile = 100.0 * beaten / n_seeds
+
+    result = {"model_mean_net": model_mean_net, "control_mean": float(control_means.mean()),"control_std": float(control_means.std()),"percentile": percentile, "n_seeds": n_seeds}
+
+    out_file = Path(f"results/control_{track}_{model_name}_{split}.json")
+    out_file.write_text(json.dumps(result, indent=2))
+    print(f"{track} {model_name}: model={model_mean_net:.5f}, control={result['control_mean']:.5f}, percentile={percentile:.0f}"
+    )
+    return result
+
+
 def main() -> None:
     """Run run_cell for every (track, model), then write the grid table.
 
@@ -184,7 +271,7 @@ def main() -> None:
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--tracks", default="a,b")
-    parser.add_argument("--models", default="e0,e1,e3")
+    parser.add_argument("--models", default="e0,e1,e2,e3")
     parser.add_argument("--split", default="trainval")
 
     args = parser.parse_args()
@@ -212,6 +299,15 @@ def main() -> None:
     table.to_csv(f"results/tables/grid_{args.split}.csv", index=False)
     print(f"grid table -> results/tables/grid_{args.split}.csv")
 
+    # controls
+    for track in tracks:
+        for model_name in models:
+            if model_name == "e0":
+                continue
+            decisions_file = Path(f"results/decisions_{track}_{model_name}_{args.split}.parquet")
+            e0_ledger_file = Path(f"results/trades_{track}_e0_{args.split}.parquet")
+            if decisions_file.exists() and e0_ledger_file.exists():
+                run_control(track, model_name, args.split)
 
 if __name__ == "__main__":
     main()

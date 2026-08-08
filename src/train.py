@@ -17,6 +17,7 @@ from src.contracts import read_parquet, seed_everything
 from src.experiments import select_tau
 from src.models.common import sha256_of_file, verify_load
 from src.models.e1 import E1
+from src.models.e2 import E2
 from src.models.e3 import E3
 
 # the normal imports of E1/E3 above are what make frozen files loadable
@@ -46,6 +47,8 @@ def train_and_freeze(model_name: str, track: str) -> None:
 
     if model_name == "e1":
         model = E1()
+    elif model_name == "e2":
+        model = E2()
     else:
         model = E3()
     model.fit(train, train["label"].values)
@@ -80,7 +83,7 @@ def train_and_freeze(model_name: str, track: str) -> None:
 def main() -> None:
     """Parse --model and --track, run train_and_freeze."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", choices=("e1", "e3"), required=True)
+    parser.add_argument("--model", choices=("e1", "e2", "e3"), required=True)
     parser.add_argument("--track", default="a")
     args = parser.parse_args()
 
