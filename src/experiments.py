@@ -1,7 +1,5 @@
-"""Runner: turns triggers + a model into decisions, trades, and tables.
-
-Run: python -m src.experiments --tracks a,b --models e0,e1,e3 --split trainval
-(The noise test lives in src/noise_test.py.)
+"""Runner: triggers + a model -> decisions, trades, tables.
+Run: python -m src.experiments --tracks a,b --models e0,e1,e2,e3 --split trainval
 """
 from __future__ import annotations
 
@@ -29,12 +27,7 @@ def load_tau(model_name: str, track: str) -> float:
 
 
 def split_rows(triggers: pd.DataFrame, split: str) -> pd.DataFrame:
-    """Rows of one evaluation split.
-
-    split "trainval" -> rows with split in (train, val); "val" -> val
-    rows only (the clean pre-test model comparison); "test" -> test
-    rows. purged/embargo rows are never traded.
-    """
+    """Rows of one evaluation split."""
     assert split in ("trainval", "val", "test"), f"unknown split '{split}'"
 
     if split == "trainval":
@@ -60,13 +53,7 @@ def model_decisions(model: EntryModel, triggers: pd.DataFrame, tau: float) -> pd
 
 def run_cell(track: str, model_name: str, split: str) -> pd.DataFrame:
     """One grid cell: triggers -> decisions -> engine -> trades ledger.
-
-    Reads data/datasets/triggers_{track}.parquet, data/spreads/
-    zscores_{track}.parquet, data/raw/prices.parquet. "e0" needs no
-    model file; other models load results/frozen/{model}_{track}.joblib
-    and their tau. Writes results/decisions_{track}_{model}_{split}.parquet
-    and results/trades_{track}_{model}_{split}.parquet (split in the name
-    so a test run never overwrites trainval files). Returns the ledger.
+    Writes decisions and trades parquets (split in the name). returns the ledger.
     """
     triggers = read_parquet(f"data/datasets/triggers_{track}.parquet")
     zscores = read_parquet(f"data/spreads/zscores_{track}.parquet")
@@ -92,11 +79,7 @@ def run_cell(track: str, model_name: str, split: str) -> pd.DataFrame:
 
 
 def make_grid_table(tracks: list, models: list, split: str) -> pd.DataFrame:
-    """One row per (track, model) read from its written ledger: n_trades,
-    mean gross, mean net at the headline cost. Cells with no ledger file
-    (skipped in the run) get no row. Deeper stats are metrics.py's job,
-    not the runner's.
-    """
+    """One row per (track, model) from its written ledger; cells with no ledger file get no row."""
     net_col = f"net_ret_{config.HEADLINE_COST_BPS}bps"
     rows = []
     for track in tracks:
@@ -112,19 +95,8 @@ def make_grid_table(tracks: list, models: list, split: str) -> pd.DataFrame:
 
 
 def select_tau(model: EntryModel, track: str) -> tuple[float, pd.DataFrame]:
-    """Apply the pre-registered tau rule for one (model, track) cell.
-
-    On VALIDATION rows only: for each tau in 0.40, 0.45, ... 0.80,
-    build decisions (enter = p_hat >= tau), run the engine, record
-    n_trades and total net P&L at the headline cost. Then pick:
-      1. among taus with >= 25 trades: max net P&L; P&L ties (within
-         1e-6) go to the HIGHER tau (trade less when indifferent)
-      2. if no tau reaches 25 trades: the tau with the most trades
-         (ties to the higher tau)
-      3. if that maximum is 0 trades: degenerate cell, tau = 0.5
-         (record it in DECISIONS.md)
-    Returns (tau, table of tau / n_trades / net_pnl). The caller writes
-    tau into results/frozen/taus.json.
+    """Pre-registered tau rule, VALIDATION rows only.
+    Returns (tau, table of tau / n_trades / net_pnl).
     """
     potential_taus = [0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80]
     net_col = f"net_ret_{config.HEADLINE_COST_BPS}bps"
@@ -175,16 +147,10 @@ def select_tau(model: EntryModel, track: str) -> tuple[float, pd.DataFrame]:
 
 
 def main() -> None:
-    """Run run_cell for every (track, model), then write the grid table.
-
-    A model whose frozen file does not exist yet is skipped with a
-    printed line, so the grid can run before every model has landed.
-    A track with no triggers file yet is skipped the same way. Then
-    make_grid_table -> results/tables/grid_{split}.csv.
-    """
+    """Run every (track, model) cell, skipping missing files, then write the grid table."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--tracks", default="a,b")
-    parser.add_argument("--models", default="e0,e1,e3")
+    parser.add_argument("--models", default="e0,e1,e2,e3")
     parser.add_argument("--split", default="trainval")
 
     args = parser.parse_args()

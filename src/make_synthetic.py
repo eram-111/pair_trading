@@ -1,12 +1,5 @@
-"""Makes fake stock data: random-walk prices and volumes for 40 made-up
-tickers (SYN00..SYN39) plus SPY, with no real relationships in it.
-
-Used two ways: stand-in data while we build the pipeline, and the input
-for the noise test — if the pipeline finds profit in this data, we have
-a leakage bug. Files have the same shape as the real ones in data/raw/.
-
-Create fake data: python -m src.make_synthetic --seed 311 --out data/synth/raw
-
+"""Fake random-walk stock data with no real relationships (noise-test input).
+Run: python -m src.make_synthetic --seed 311 --out data/synth/raw
 """
 from __future__ import annotations
 
@@ -22,13 +15,7 @@ from src.contracts import write_parquet
 
 def make_synthetic(n_tickers: int = 40, start: str = "2014-01-01", end: str = "2025-01-01", seed: int = config.SEED, out_dir: Path = Path("data/synth/raw")):
     """Write prices.parquet, volume.parquet, spy.parquet under out_dir.
-
-    Log prices p_t = p_{t-1} + eps, eps ~ N(0, sigma_i), with
-    sigma_i ~ U(0.008, 0.025) drawn once per ticker; p_0 = ln(U(20, 500)).
-    Volume: round(base_i * exp(N(0, 0.3))), base_i ~ logU(1e5, 1e7).
-    One np.random.default_rng(seed) drives everything — same seed, same
-    files, byte for byte. (Draw order is part of that guarantee: reordering
-    the loops below changes the output.)
+    One rng(seed) drives all draws; same seed gives byte-identical files, so draw order matters.
     """
     num_generator = np.random.default_rng(seed)
 

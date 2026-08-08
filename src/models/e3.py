@@ -1,7 +1,4 @@
-"""E3: small MLP (7 -> hidden -> 1) behind the EntryModel interface.
-
-Trained and frozen by the runner: python -m src.train --model e3 --track a
-"""
+"""E3: small MLP entry model. Run: python -m src.train --model e3 --track a"""
 from __future__ import annotations
 
 import copy
@@ -15,8 +12,7 @@ from src.models.common import EntryModel
 
 
 class E3(EntryModel):
-    """Small MLP: Linear(7, hidden) -> ReLU -> Linear(hidden, 1).
-    """
+    """Small MLP: Linear(7, hidden) -> ReLU -> Linear(hidden, 1)."""
 
     def __init__(self, hidden: int = 16, weight_decay: float = 0.001):
         super().__init__("e3")
@@ -27,20 +23,13 @@ class E3(EntryModel):
         self.y_train = None
 
     def _build_net(self) -> torch.nn.Module:
-        """Fresh Linear(7, self.hidden) -> ReLU -> Linear(self.hidden, 1).
-        Outputs a raw logit; sigmoid happens in _predict_scaled."""
+        """Fresh network; outputs a raw logit, sigmoid happens in _predict_scaled."""
         n_features = len(config.FEATURES)
         return torch.nn.Sequential(torch.nn.Linear(n_features, self.hidden), torch.nn.ReLU(), torch.nn.Linear(self.hidden, 1))
 
     def _train_net(self, X_scaled, y, X_val_scaled=None, y_val=None):
-        """The one training loop, used by both fit and tune.
-
-        torch.manual_seed(config.SEED) first, so every config starts
-        from the same weights. Full-batch Adam for up to 500 iterations.
-        With val data: early-stop on validation AUC, patience 25, keep
-        the best-val-AUC weights, return that AUC. Without val data:
-        run the full 500 iterations, return None.
-        """
+        """Shared training loop. With val data: early-stop on val AUC and
+        return the best AUC. If without val data, return None."""
         torch.manual_seed(config.SEED)
 
         X = torch.as_tensor(np.asarray(X_scaled), dtype=torch.float32)
@@ -110,10 +99,7 @@ class E3(EntryModel):
         return probabilities
 
     def tune(self, X_val, y_val) -> dict:
-        """Try every hidden size in config.E3_HIDDEN x weight_decay in
-        (0.0001, 0.001, 0.01), each trained by _train_net with early
-        stopping on the val rows; end fitted with the best config.
-        fit() must have run first.
+        """Grid-search hidden x weight_decay. fit() must have run first.
         Returns {"hidden": ..., "weight_decay": ..., "val_auc": ...}."""
         assert self.X_train_scaled is not None, "fit() must run before tune()"
 

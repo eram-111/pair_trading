@@ -33,7 +33,7 @@ RECLUSTER_EVERY: int = 21       # trading days, trailing 252d formation window
 TRACK_B_REFRESH: str = "quarterly"
 KMEANS_N_INIT: int = 10         # k-means++ init; k by max silhouette, formation window ONLY
 K_RANGE: dict[str, range] = {
-    "a": range(8, 14), "b": range(10, 14), "c": range(8, 14),
+    "a": range(8, 14), "b": range(10, 14),
 }
 # Track A cluster input: each stock's factor-beta vector from the formation window
 # Pair rules (Zhang): drop singletons; 2-4 -> all pairs; 5+ -> greedy NN subgroups of 2-3
@@ -84,8 +84,9 @@ NOTIONAL_PER_LEG: float = 1.0   # long lagging / short leading leg by sign of z
 COST_GRID_BPS: tuple[int, ...] = (0, 5, 10, 15, 20, 30, 40, 50)  # per leg per transaction
 HEADLINE_COST_BPS: int = 10
 
-# ----------------------------------------------------------------- Track C (cut; constant kept for the record)
-PARTIAL_CORR_SHRINKAGE: float = 1e-3   # ridge shrinkage, in-window only
+# ----------------------------------------------------------------- figures
+MODEL_COLORS: dict[str, str] = {"e0": "#2a78d6", "e1": "#eb6834", "e2": "#1baf7a", "e3": "#eda100"}
+# one fixed color per model in every figure (validated palette)
 
 # ----------------------------------------------------------------- pre-registration
 PRIMARY_COMPARISON: tuple[str, str] = ("track_a__e1", "track_a__e0")

@@ -1,12 +1,6 @@
-"""Training runner: fits, tunes, and freezes one model for one track.
-
-The mirror of experiments.py — that file evaluates frozen models, this
-one creates them. Model classes are imported here under their real
-module names, so frozen files always load from any process (a model
-module freezing itself as __main__ pickles an unloadable class path).
-
-Run: python -m src.train --model e3 --track a
-"""
+"""Fit, tune, and freeze one model per track; models must be imported
+under their real module names or frozen files won't load.
+Run: python -m src.train --model e3 --track a"""
 from __future__ import annotations
 
 import argparse
@@ -17,27 +11,15 @@ from src.contracts import read_parquet, seed_everything
 from src.experiments import select_tau
 from src.models.common import sha256_of_file, verify_load
 from src.models.e1 import E1
+from src.models.e2 import E2
 from src.models.e3 import E3
 
 # the normal imports of E1/E3 above are what make frozen files loadable
 
 
 def train_and_freeze(model_name: str, track: str) -> None:
-    """The one freeze protocol, identical for every model.
-
-    1. read data/datasets/triggers_{track}.parquet
-    2. build the model (E1 or E3); fit on train rows, tune on val
-       rows (print the tune report)
-    3. tau, table = select_tau(model, track); print the table
-    4. model.save(results/frozen/{model_name}_{track}.joblib)
-    5. freeze smoke test: verify_load(path, val rows, the live model's
-       predictions) — the reloaded file must predict identically
-    6. put tau under "{model_name}_{track}" in results/frozen/taus.json
-       (read the dict if the file exists, set the key, write back)
-    7. only e1: write model.coefficient_table() to
-       results/tables/e1_coefficients_{track}.csv
-    8. print the joblib's sha256 for DECISIONS.md
-    """
+    """Freeze protocol for every model: fit on train rows only, tune on val,
+    save joblib + tau, and verify the reloaded file predicts identically."""
     triggers = read_parquet(f"data/datasets/triggers_{track}.parquet")
     train_mask = triggers["split"] == "train"
     train = triggers[train_mask]
@@ -46,6 +28,8 @@ def train_and_freeze(model_name: str, track: str) -> None:
 
     if model_name == "e1":
         model = E1()
+    elif model_name == "e2":
+        model = E2()
     else:
         model = E3()
     model.fit(train, train["label"].values)
@@ -80,7 +64,7 @@ def train_and_freeze(model_name: str, track: str) -> None:
 def main() -> None:
     """Parse --model and --track, run train_and_freeze."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", choices=("e1", "e3"), required=True)
+    parser.add_argument("--model", choices=("e1", "e2", "e3"), required=True)
     parser.add_argument("--track", default="a")
     args = parser.parse_args()
 

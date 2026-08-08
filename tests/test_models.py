@@ -81,6 +81,25 @@ def test_save_load_round_trip(tmp_path):
     verify_load(path, X, p_before)          # raises if the round-trip broke
 
 
+def test_e2_matches_sklearn_lda():
+    # shared-covariance GDA is mathematically LDA; our numpy must agree
+    # with sklearn's implementation to 1e-6
+    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+    from src.models.e2 import E2
+
+    X = make_X(200)
+    y = np.array(([1] * 3 + [0] * 7) * 20)  # base rate 0.3, both classes present
+    model = E2().fit(X, y)
+    ours = model.predict_proba(X)
+
+    X_scaled = model.scaler.transform(X[list(config.FEATURES)])
+    lda = LinearDiscriminantAnalysis()
+    lda.fit(X_scaled, y)
+    theirs = lda.predict_proba(X_scaled)[:, 1]
+
+    assert np.abs(ours - theirs).max() < 1e-6, "numpy GDA must match sklearn LDA"
+
+
 def test_e0_decisions():
     triggers = fake_triggers()
     decisions = e0_decisions(triggers)
