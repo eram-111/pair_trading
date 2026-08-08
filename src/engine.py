@@ -50,7 +50,7 @@ def run_backtest(zscores: pd.DataFrame, prices: pd.DataFrame, triggers: pd.DataF
 
         # Entry: one day after the trigger day (t+1).
         trigger_day = zscores.index.get_loc(trigger_date)
-        entry_day = trigger_day + 1
+        entry_day = trigger_day + config.ENTRY_LAG_DAYS
         if entry_day > last_day:
             dropped = dropped + 1
             continue
@@ -132,10 +132,11 @@ def daily_strategy_returns(trades: pd.DataFrame, prices: pd.DataFrame, triggers:
 
         # entry transaction cost
         entry_date = prices.index[entry_day]
-        pnl_lists_dict[entry_date].append(-cost_per_transaction)
         if exit_day == entry_day:
-            pnl_lists_dict[entry_date].append(-cost_per_transaction)
+            # same-day entry and exit
+            pnl_lists_dict[entry_date].append(-2 * cost_per_transaction)
             continue
+        pnl_lists_dict[entry_date].append(-cost_per_transaction)
 
         # Every held day P&L
         curr_day = entry_day + 1

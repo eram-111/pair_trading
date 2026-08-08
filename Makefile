@@ -7,14 +7,14 @@ data_pull:       ## downloads new data from yfinance, then works same as make da
 	python -m src.data --pull
 tracka: data     ## Steps 2-6, track a: factors -> clusters -> pairs -> z-scores, one module
 	python -m src.representation --track a
-trackb: data     ## Track B approach file, then the shared representation machinery
-	python -m src.characteristics
-	python -m src.representation --track b
+# trackb: data     ## Track B approach file, then the shared representation machinery (track b cut)
+# 	python -m src.characteristics
+# 	python -m src.representation --track b
 # trackc: tracka   ## Track C approach file (reads corr_windows.npz), then the shared machinery
 # 	python -m src.partial_corr
 # 	python -m src.representation --track c
-dataset: tracka trackb
-	python -m src.dataset --tracks a,b
+dataset: tracka
+	python -m src.dataset --tracks a
 models:          ## fit + tune + freeze each model: writes results/frozen/{model}_{track}.joblib + taus.json
 	python -m src.train --model e1 --track a
 	python -m src.train --model e2 --track a
@@ -30,4 +30,4 @@ figures:         ## regenerate every table + figure from written results (run af
 	python -m src.analysis
 test:
 	pytest -q
-all: data tracka trackb dataset models grid figures
+all: data tracka dataset models grid figures
