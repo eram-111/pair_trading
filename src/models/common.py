@@ -1,7 +1,4 @@
-"""EntryModel: abstract base class all entry models (E1, E2, E3) subclass,
-so the runner uses every model through one interface. Also E0 (a plain
-function — nothing to learn) and the model freeze helpers.
-"""
+"""EntryModel base class for E1-E3, the E0 baseline function, and helpers."""
 from __future__ import annotations
 
 import hashlib
@@ -16,18 +13,9 @@ from src.contracts import validate_artifact
 
 
 class EntryModel:
-    """Abstract base class for entry models.
-
-    The base guarantees, for every subclass:
-    - features = the 7 config.FEATURES columns, in that order
-    - scaler is fit on TRAIN rows only (inside fit) and reused everywhere
-      after — refitting it later would leak
-    - save/load keep model + scaler in one file
-
-    Concrete (do not override): fit, predict_proba, save, load.
-    Abstract (must override): _fit_scaled, _predict_scaled, tune,
-    get_params_report.
-    """
+    """Abstract base for entry models. Uses config.FEATURES in order; scaler is
+    fit on train rows only and never refit. Subclasses override _fit_scaled,
+    _predict_scaled, tune, get_params_report."""
 
     name: str      # subclasses set "e1" / "e2" / "e3"
     scaler: StandardScaler | None

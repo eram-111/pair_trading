@@ -1,10 +1,4 @@
-"""Defines what every data file in this project must look like, and checks it.
-
-SCHEMAS lists each file's expected columns, dtypes, and index.
-validate_artifact(df, name) raises AssertionError when a frame doesn't
-match. write_parquet/read_parquet route all file IO through that check,
-so a malformed file never lands on disk. seed_everything makes every run
-repeatable. Changing a schema needs team agreement + a DECISIONS.md entry.
+"""Data-file schemas and validation; all parquet IO goes through here.
 """
 from __future__ import annotations
 
@@ -16,21 +10,9 @@ from src import config
 
 
 class ArtifactSchema:
-    """Expected shape of one data artifact.
-
-    columns — dict(fixed column name, pandas dtype string) ({} if no fixed columns).
-
-    index — required index name ("date"), or None for tables with a plain
-    RangeIndex. A date index must be datetime64, tz-naive, and
-    strictly increasing.
-
-    extra_float_cols — True for tables that also carry data-dependent
-    columns (one per ticker / pair_id / characteristics field); those
-    must all be float64. False = no columns beyond `columns` allowed.
-
-    checks — extra per-artifact rules, each a function (df) -> None that
-    raises AssertionError with a clear message.
-    """
+    """Expected shape of one artifact: fixed columns/dtypes, index name or None,
+    extra_float_cols allows extra data-dependent float64 columns, checks are
+    functions that raise AssertionError."""
     def __init__(self, columns: dict[str, str], index: str | None = None, extra_float_cols: bool = False, checks: tuple = ()):
         self.columns = columns
         self.index = index
@@ -42,12 +24,7 @@ class ArtifactSchema:
 # Check functions
 
 def _check_pair_id_alphabetical(df: pd.DataFrame) -> None:
-    """pair_id legs are alphabetical.
-
-    Where stock_a/stock_b columns exist (pairs): stock_a < stock_b and
-    pair_id == f"{stock_a}__{stock_b}". Where they don't (stability has
-    only pair_id): split pair_id on "__" and assert the legs are sorted.
-    """
+    """pair_id == f"{stock_a}__{stock_b}" with legs alphabetical."""
     if "stock_a" in df.columns:
         for index, row in df.iterrows():
             assert row["stock_a"] < row["stock_b"], f"stock_a must be < stock_b; bad pair_id: '{row['pair_id']}'"
@@ -132,7 +109,6 @@ SCHEMAS: dict[str, ArtifactSchema] = {
 # ---------------------------------------------------------------- validation
 def validate_artifact(df: pd.DataFrame, name: str) -> None:
     """Assert df matches SCHEMAS[name]; raise AssertionError otherwise.
-
     Checks, in order:
       1. name is registered.
       2. Every column named in schema.columns is present with its exact
@@ -141,9 +117,7 @@ def validate_artifact(df: pd.DataFrame, name: str) -> None:
       3. Index, when schema.index is set: name matches, datetime64,
          tz-naive, monotonic increasing, unique.
       4. Every callable in schema.checks passes.
-
-    Producers call this before every write (normally via write_parquet).
-    """
+      """
     # 1. name is registered
     assert name in SCHEMAS, f"unknown artifact name '{name}'; known: {sorted(SCHEMAS)}"
     artifact = SCHEMAS[name]
@@ -182,17 +156,7 @@ def validate_artifact(df: pd.DataFrame, name: str) -> None:
 
 # ---------------------------------------------------------------- parquet IO
 def write_parquet(df: pd.DataFrame, path: Path | str, name: str) -> None:
-    """Validate then write — the only sanctioned parquet write path.
-
-    Order of operations:
-      1. validate_artifact(df, name)
-      2. Coerce column labels to str (pyarrow refuses non-string labels).
-      3. Assert any date index is named "date" and tz-naive.
-      4. df.to_parquet(path)  # pyarrow engine; parent dir created if missing
-
-    `name` is the SCHEMAS key (base name, e.g. "triggers" for
-    data/datasets/triggers_a.parquet).
-    """
+    """Validate then write — the only sanctioned parquet write path."""
     validate_artifact(df, name)
 
     df = df.copy()  # never mutate the caller's frame
@@ -228,12 +192,7 @@ def write_validated_csv(df: pd.DataFrame, path: Path | str, name: str) -> None:
 
 # ------------------------------------------------------------------- seeding
 def seed_everything(seed: int = config.SEED) -> None:
-    """Seed random, numpy, and torch; enable deterministic algorithms.
-
-    Called by every pipeline entry point and every test. torch is imported
-    lazily inside this function so non-model code paths never require it at
-    import time.
-    """
+    """Seed random, numpy, and torch; enable deterministic algorithms.."""
     import random
     import numpy as np
     import torch

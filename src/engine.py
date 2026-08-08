@@ -1,17 +1,5 @@
 """Backtest engine: turns entry decisions into a ledger of completed trades.
-
-For each trigger the decisions table accepts, the engine replays the
-trade day by day under the same fixed rules:
-- Enter at the close of the trading day after the trigger day (t+1).
-- Direction from the sign of z at trigger: z > 0 -> short stock_a,
-  long stock_b; z < 0 -> the reverse. $1 per leg.
-- Exit at the first close with |z| < 0.5 ("reverted"), else at the
-  close 5 trading days after entry ("timeout").
-- gross_ret = sum of daily (long return - short return) over the
-  holding days, from simple returns.
-- Costs: c basis points per leg per transaction = 4c per round trip,
-  precomputed as one net_ret_{c}bps column per value in the cost grid.
-"""
+Enter at t+1. Costs are c bps per leg per transaction = 4c per round trip."""
 from __future__ import annotations
 
 import pandas as pd
@@ -20,41 +8,20 @@ from src import config
 from src.contracts import validate_artifact
 
 def _simple_ret(prices: pd.DataFrame)-> pd.DataFrame:
-    """
-    Table of simple returns
-    """
+    """Table of simple returns."""
     prices_shifted_forward = prices.shift(1)
     return (prices - prices_shifted_forward ) / prices_shifted_forward
 
 def _split_stocks(pair_id: str, z_trigger: float) -> tuple[str, str]:
-    """
-    Return long_stock, short_stock from the pair id and the trigger's z sign.
-    z > 0: -> short stock_a, long stock_b.
-    z < 0: -> long stock_a, short stock_b.
-    """
+    """Return (long_stock, short_stock). z > 0 shorts stock_a, longs stock_b."""
     stock_a, stock_b = pair_id.split("__")
     if z_trigger > 0:
         return stock_b, stock_a
     return stock_a, stock_b
 
 def run_backtest(zscores: pd.DataFrame, prices: pd.DataFrame, triggers: pd.DataFrame, decisions: pd.DataFrame,  cost_grid_bps: tuple = config.COST_GRID_BPS) -> pd.DataFrame:
-    """Replay every accepted trigger; return the trades ledger.
-
-    Steps:
-      1. Precompute simple returns once: prices / prices.shift(1) - 1.
-      2. For each trigger whose decision says enter=True:
-         - entry position = position of trigger_date in the index + 1
-           (if that is past the last day, drop the trigger and count it);
-         - direction from the sign of z_trigger;
-         - walk forward one day at a time starting the day AFTER entry:
-           add (long return - short return) to gross, exit when |z| < 0.5
-           or when 5 trading days have passed since entry, whichever
-           comes first (check reversion before timeout);
-         - append one ledger row: trigger_id, pair_id, entry_date,
-           exit_date, exit_reason, days_held, gross_ret.
-      3. Add net_ret_{c}bps = gross_ret - 4 * c * 0.0001 per grid value.
-      4. Validate against the "trades" schema and return.
-    """
+    """Replay every accepted trigger. return the trades ledger ("trades" schema),
+    with one net_ret_{c}bps = gross_ret - 4*c*0.0001 column per cost-grid value."""
     returns = _simple_ret(prices)
 
     decision_dict = {}
@@ -142,20 +109,8 @@ def run_backtest(zscores: pd.DataFrame, prices: pd.DataFrame, triggers: pd.DataF
 
 
 def daily_strategy_returns(trades: pd.DataFrame, prices: pd.DataFrame, triggers: pd.DataFrame, cost_bps: int = config.HEADLINE_COST_BPS) -> pd.Series:
-    """One return per calendar day: equal-weight mean of open trades' daily P&L.
-
-    For each day, take every trade open that day, average their
-    (long return - short return) for the day, equal weight. Days with no
-    open trade contribute 0.0. Costs enter the daily stream as -2c bps on
-    each trade's entry day and -2c bps on its exit day (at the moment of
-    each transaction, never as a lump at the end). No capital constraint:
-    every accepted trade is always taken.
-
-    Needs `prices` to rebuild each trade's daily leg returns (the ledger
-    stores only the summed gross_ret) and `triggers` to recover each
-    trade's direction (the ledger does not store which leg was long;
-    z_trigger does, via _split_stocks).
-    """
+    """One return per day: equal-weight mean of open trades' daily P&L, 0.0 when
+    no trades open. costs hit as -2c bps on each trade's entry day and exit day."""
     returns = _simple_ret(prices)
     cost_per_transaction = 2 * cost_bps * 0.0001
 

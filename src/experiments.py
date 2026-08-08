@@ -1,7 +1,5 @@
-"""Runner: turns triggers + a model into decisions, trades, and tables.
-
-Run: python -m src.experiments --tracks a,b --models e0,e1,e3 --split trainval
-(The noise test lives in src/noise_test.py.)
+"""Runner: triggers + a model -> decisions, trades, tables.
+Run: python -m src.experiments --tracks a,b --models e0,e1,e2,e3 --split trainval
 """
 from __future__ import annotations
 
@@ -9,7 +7,6 @@ import argparse
 import json
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from src import config
@@ -30,12 +27,7 @@ def load_tau(model_name: str, track: str) -> float:
 
 
 def split_rows(triggers: pd.DataFrame, split: str) -> pd.DataFrame:
-    """Rows of one evaluation split.
-
-    split "trainval" -> rows with split in (train, val); "val" -> val
-    rows only (the clean pre-test model comparison); "test" -> test
-    rows. purged/embargo rows are never traded.
-    """
+    """Rows of one evaluation split."""
     assert split in ("trainval", "val", "test"), f"unknown split '{split}'"
 
     if split == "trainval":
@@ -61,13 +53,7 @@ def model_decisions(model: EntryModel, triggers: pd.DataFrame, tau: float) -> pd
 
 def run_cell(track: str, model_name: str, split: str) -> pd.DataFrame:
     """One grid cell: triggers -> decisions -> engine -> trades ledger.
-
-    Reads data/datasets/triggers_{track}.parquet, data/spreads/
-    zscores_{track}.parquet, data/raw/prices.parquet. "e0" needs no
-    model file; other models load results/frozen/{model}_{track}.joblib
-    and their tau. Writes results/decisions_{track}_{model}_{split}.parquet
-    and results/trades_{track}_{model}_{split}.parquet (split in the name
-    so a test run never overwrites trainval files). Returns the ledger.
+    Writes decisions and trades parquets (split in the name). returns the ledger.
     """
     triggers = read_parquet(f"data/datasets/triggers_{track}.parquet")
     zscores = read_parquet(f"data/spreads/zscores_{track}.parquet")
@@ -93,11 +79,7 @@ def run_cell(track: str, model_name: str, split: str) -> pd.DataFrame:
 
 
 def make_grid_table(tracks: list, models: list, split: str) -> pd.DataFrame:
-    """One row per (track, model) read from its written ledger: n_trades,
-    mean gross, mean net at the headline cost. Cells with no ledger file
-    (skipped in the run) get no row. Deeper stats are metrics.py's job,
-    not the runner's.
-    """
+    """One row per (track, model) from its written ledger; cells with no ledger file get no row."""
     net_col = f"net_ret_{config.HEADLINE_COST_BPS}bps"
     rows = []
     for track in tracks:
@@ -113,19 +95,8 @@ def make_grid_table(tracks: list, models: list, split: str) -> pd.DataFrame:
 
 
 def select_tau(model: EntryModel, track: str) -> tuple[float, pd.DataFrame]:
-    """Apply the pre-registered tau rule for one (model, track) cell.
-
-    On VALIDATION rows only: for each tau in 0.40, 0.45, ... 0.80,
-    build decisions (enter = p_hat >= tau), run the engine, record
-    n_trades and total net P&L at the headline cost. Then pick:
-      1. among taus with >= 25 trades: max net P&L; P&L ties (within
-         1e-6) go to the HIGHER tau (trade less when indifferent)
-      2. if no tau reaches 25 trades: the tau with the most trades
-         (ties to the higher tau)
-      3. if that maximum is 0 trades: degenerate cell, tau = 0.5
-         (record it in DECISIONS.md)
-    Returns (tau, table of tau / n_trades / net_pnl). The caller writes
-    tau into results/frozen/taus.json.
+    """Pre-registered tau rule, VALIDATION rows only.
+    Returns (tau, table of tau / n_trades / net_pnl).
     """
     potential_taus = [0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80]
     net_col = f"net_ret_{config.HEADLINE_COST_BPS}bps"
@@ -175,100 +146,8 @@ def select_tau(model: EntryModel, track: str) -> tuple[float, pd.DataFrame]:
     return chosen, tau_table
 
 
-def matched_control_decisions(model_decisions: pd.DataFrame, triggers: pd.DataFrame, seed: int) -> pd.DataFrame:
-    """One random strategy with the model's exact footprint.
-
-    Per calendar quarter: count how many triggers the model entered,
-    then pick that many of the quarter's triggers uniformly at random
-    (without replacement). Matching per quarter copies the model's
-    temporal footprint, so the only difference left is WHICH triggers
-    were chosen — the skill question. Returns a decisions table:
-    enter=True for the picks, False otherwise, p_hat=NaN. The rng is
-    seeded with config.SEED + seed, so draw i is reproducible.
-    """
-    rng = np.random.default_rng(config.SEED + seed)
-
-    merged = model_decisions.merge(triggers[["trigger_id", "trigger_date"]],on="trigger_id")
-    merged["quarter"] = merged["trigger_date"].dt.to_period("Q")
-
-    picked = []
-
-    for i, row in merged.groupby("quarter"):
-        entered_trades = row["enter"]
-        n_entered = entered_trades.sum()
-        if n_entered == 0:
-            continue
-        picks = rng.choice(row["trigger_id"], size=n_entered, replace=False)
-        picked.extend(picks)
-
-    decisions = model_decisions[["trigger_id"]].copy()
-    decisions["enter"] = decisions["trigger_id"].isin(picked)
-    decisions["p_hat"] = float("nan")
-    validate_artifact(decisions, "decisions")
-    return decisions
-
-
-def run_control(track: str, model_name: str, split: str, n_seeds: int = 1000) -> dict:
-    """The turnover-matched control for one grid cell.
-
-    The e0 ledger holds one completed trade for EVERY trigger (e0
-    enters everything), so both the model and each random strategy are
-    scored by looking their entered ids up there — same scoring for
-    all, no engine reruns. percentile = share of the n_seeds random
-    strategies whose mean net the model beats. Writes and returns
-    results/control_{track}_{model}_{split}.json.
-    """
-    net_col = f"net_ret_{config.HEADLINE_COST_BPS}bps"
-
-    triggers = read_parquet(f"data/datasets/triggers_{track}.parquet")
-    model_decisions_table = read_parquet(f"results/decisions_{track}_{model_name}_{split}.parquet")
-    e0_trades = read_parquet(f"results/trades_{track}_e0_{split}.parquet")
-
-    net_by_trigger_id = e0_trades.set_index("trigger_id")[net_col]
-
-    all_ids_known = model_decisions_table["trigger_id"].isin(net_by_trigger_id.index).all()
-
-    assert all_ids_known, "e0 ledger is missing triggers: run the e0 cell for this split first"
-
-    entered = model_decisions_table[model_decisions_table["enter"]]
-    if len(entered) == 0:
-        print(f"{track} {model_name}: entered no trades (degenerate cell) — control skipped")
-        return {}
-
-    model_returns = net_by_trigger_id.loc[entered["trigger_id"]]
-    model_mean_net = float(model_returns.mean())
-
-    control_means = []
-
-    for seed in range(n_seeds):
-        control = matched_control_decisions(model_decisions_table, triggers, seed)
-        picks = control[control["enter"]]
-        control_returns = net_by_trigger_id.loc[picks["trigger_id"]]
-        control_mean = float(control_returns.mean())
-        control_means.append(control_mean)
-
-    control_means = np.array(control_means)
-
-    beaten = int((control_means < model_mean_net).sum())
-    percentile = 100.0 * beaten / n_seeds
-
-    result = {"model_mean_net": model_mean_net, "control_mean": float(control_means.mean()),"control_std": float(control_means.std()),"percentile": percentile, "n_seeds": n_seeds}
-
-    out_file = Path(f"results/control_{track}_{model_name}_{split}.json")
-    out_file.write_text(json.dumps(result, indent=2))
-    print(f"{track} {model_name}: model={model_mean_net:.5f}, control={result['control_mean']:.5f}, percentile={percentile:.0f}"
-    )
-    return result
-
-
 def main() -> None:
-    """Run run_cell for every (track, model), then write the grid table.
-
-    A model whose frozen file does not exist yet is skipped with a
-    printed line, so the grid can run before every model has landed.
-    A track with no triggers file yet is skipped the same way. Then
-    make_grid_table -> results/tables/grid_{split}.csv.
-    """
+    """Run every (track, model) cell, skipping missing files, then write the grid table."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--tracks", default="a,b")
     parser.add_argument("--models", default="e0,e1,e2,e3")
@@ -299,15 +178,6 @@ def main() -> None:
     table.to_csv(f"results/tables/grid_{args.split}.csv", index=False)
     print(f"grid table -> results/tables/grid_{args.split}.csv")
 
-    # controls
-    for track in tracks:
-        for model_name in models:
-            if model_name == "e0":
-                continue
-            decisions_file = Path(f"results/decisions_{track}_{model_name}_{args.split}.parquet")
-            e0_ledger_file = Path(f"results/trades_{track}_e0_{args.split}.parquet")
-            if decisions_file.exists() and e0_ledger_file.exists():
-                run_control(track, model_name, args.split)
 
 if __name__ == "__main__":
     main()

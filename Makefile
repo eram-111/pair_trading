@@ -25,8 +25,9 @@ noise-test:      ## full pipeline on src/make_synthetic.py output; PASS/FAIL cri
 	python -m src.noise_test
 test-run:        ## the ONE witnessed test-split run (soft freeze: discipline, not code)
 	python -m src.experiments --tracks a,b --models e0,e1,e2,e3 --split test
-figures:
-	python -m scripts.figures.make_all
+figures:         ## regenerate every table + figure from written results (run after test-run)
+	python -m src.metrics --tracks a --split test
+	python -m src.analysis
 test:
 	pytest -q
 all: data tracka trackb dataset models grid figures

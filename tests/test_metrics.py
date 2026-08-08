@@ -1,14 +1,14 @@
-"""Tests for the turnover-matched control in src/experiments.py.
+"""Tests for the turnover-matched control in src/metrics.py.
 
 Hand fixture: 6 triggers over two quarters; the fake model entered
 2 of 4 in Q1 and 1 of 2 in Q2.
 
-Run: pytest -q tests/test_experiments.py
+Run: pytest -q tests/test_metrics.py
 """
 import pandas as pd
 import pytest
 
-from src.experiments import matched_control_decisions
+from src.metrics import matched_control_decisions
 
 
 def fake_triggers():

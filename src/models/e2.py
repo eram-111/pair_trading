@@ -1,7 +1,4 @@
-"""E2: Gaussian discriminant analysis with a shared covariance.
-
-Trained and frozen by the runner: python -m src.train --model e2 --track a
-"""
+"""E2: GDA with shared covariance. Run: python -m src.train --model e2 --track a"""
 from __future__ import annotations
 
 import numpy as np
@@ -9,13 +6,7 @@ import numpy as np
 from src.models.common import EntryModel
 
 class E2(EntryModel):
-    """GDA: one Gaussian per class, both sharing one covariance.
-
-    Learns the class prior, the two class means, and the pooled
-    covariance from the training rows; predicts P(label=1 | x) by
-    Bayes' rule. With a shared covariance this is mathematically LDA —
-    the test checks our numpy against sklearn's to 1e-6.
-    """
+    """GDA with one Gaussian per class and shared covariance."""
 
     def __init__(self):
         super().__init__("e2")
@@ -48,8 +39,7 @@ class E2(EntryModel):
         self.inf_cov = np.linalg.inv(covariance )
 
     def _predict_scaled(self, X_scaled):
-        """P(label=1 | x) by Bayes' rule.
-        """
+        """Return P(label=1 | x) by Bayes' rule."""
         X = np.asarray(X_scaled, dtype="float64")
 
         diff = self.mean_1 - self.mean_0

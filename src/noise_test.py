@@ -1,8 +1,5 @@
-"""Noise test: the full pipeline run on synthetic random-walk prices.
-
-If the pipeline finds reliable profit or model skill in pure noise, we
-have a leakage bug. Everything is written under results/noise/, ending
-in PASS_FAIL.md. Run: python -m src.noise_test  (make noise-test).
+"""Noise test: full pipeline on synthetic random-walk prices; any skill found means leakage.
+Run: python -m src.noise_test  (make noise-test).
 """
 from __future__ import annotations
 
@@ -23,12 +20,7 @@ from src.representation import run_track_a
 
 
 def _learned_model_classes() -> dict:
-    """name -> class for each learned model whose module is implemented.
-
-    Try to import E1 and E3; an import error means "not written yet",
-    not failure — that model is left out and the noise test simply
-    reruns after it lands.
-    """
+    """name -> class for each learned model that imports; import errors mean "not written yet"."""
     classes = {}
     try:
         from src.models.e1 import E1
@@ -49,16 +41,7 @@ def _learned_model_classes() -> dict:
 
 
 def build_synthetic_triggers() -> tuple:
-    """Run the real pipeline on the synthetic data, in memory.
-
-    1. read data/synth/raw prices + volume (assert they exist: run
-       'make data' first) and compute log returns
-    2. run_track_a on the synthetic returns — the SAME function the
-       real track-a build calls
-    3. dataset chain, exactly as the builder runs it: detect_triggers
-       -> assign_split -> build_features -> fill_missing_features ->
-       reorder + astype to the "triggers" schema columns
-    4. write results/noise/triggers_synth.parquet
+    """Run the real pipeline on the synthetic data (needs 'make data' first).
     Returns (triggers, zscores, prices).
     """
     # synthetic inputs
@@ -103,12 +86,7 @@ def _check_returns(trades: pd.DataFrame) -> str:
 
 
 def _auc_difference_ci_low(y_val, p_model, p_base, rng) -> float:
-    """Bootstrap the (model - baseline) AUC difference on the val rows.
-
-    1000 resamples with replacement; a resample whose labels are all
-    one class has no AUC and is skipped. Returns the 2.5th percentile
-    of the differences (the CI's low end).
-    """
+    """Bootstrap the (model - baseline) AUC difference on val rows; returns the 2.5th percentile."""
     diffs = []
     for draw in range(1000):
         sample = rng.integers(0, len(y_val), size=len(y_val))
@@ -187,27 +165,8 @@ def _check_trigger_counts(tradeable: pd.DataFrame) -> str:
 
 
 def run_noise_test() -> None:
-    """PASS/FAIL lines -> results/noise/PASS_FAIL.md (also printed).
-
-    First e0: trade every train/val/test trigger through run_backtest,
-    write results/noise/trades_synth_e0.parquet. Then the criteria,
-    one line each:
-      1. returns (binding): e0 mean net at the headline cost is <= 0,
-         or its 95% CI covers 0. CI low = mean - 1.96 * std / sqrt(n);
-         red flag = CI low > 0.
-      2. auc (binding, one line per learned model): fit on synthetic
-         train rows, predict val rows; the model's AUC must not beat
-         an abs-z-only LogisticRegression baseline. Bootstrap the AUC
-         DIFFERENCE on the val rows (1000 seeded draws; skip a
-         resample whose labels are all one class); red flag = the
-         difference's CI low > 0. The baseline's own AUC is printed as
-         advisory only — above 0.5 on noise is mechanical, not
-         leakage. A model whose class imports but whose methods raise
-         NotImplementedError gets a SKIP line instead of a crash.
-      3. triggers (binding): > 50 tradeable triggers fired and the
-         label base rate is strictly inside (0, 1).
-    Any FAIL means a leakage bug: stop and find it before trusting
-    results.
+    """Write PASS/FAIL lines to results/noise/PASS_FAIL.md (also printed).
+    Any FAIL means a leakage bug: stop and find it before trusting results.
     """
     out_dir = Path("results/noise")
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -16,10 +16,7 @@ ticks['cs'] = ['PG','KO','PEP','WMT','COST','MDLZ','CL','KMB','GIS','SYY']
 
 def get_universe() -> pd.DataFrame:
     """One row per ticker, columns: ticker, sector, included.
-
-    `included` starts True for everyone; clean_prices flips it to False 
-    for any ticker dropped due to missing-data
-    """
+    'included' starts True, clean_prices flips it False for dropped tickers."""
     rows = []
     for sector in ticks:
         for ticker in ticks[sector]:
@@ -28,10 +25,8 @@ def get_universe() -> pd.DataFrame:
 
 def download_prices(tickers: list[str], start_date: str = config.DOWNLOAD_START, end_date: str = config.DATA_END,
                     cache_dir: str = "data/raw/cache") -> tuple[pd.DataFrame, pd.DataFrame]:
-    """yfinance pull, auto_adjust=True passed explicitly (not left to the
-    default). Raw per-ticker CSVs cached and committed, so the pull is
-    reproducible even if yfinance data shifts later. 
-    Returns (prices, volume), date x ticker.""" 
+    """yfinance pull with auto_adjust=True; caches per-ticker CSVs.
+    Returns (prices, volume), date x ticker."""
     data = yf.download(tickers, start=start_date, end=end_date, auto_adjust=True)
     closing_prices = data["Close"][tickers]
     volume = data["Volume"][tickers]
@@ -64,13 +59,8 @@ def load_cached_prices(tickers: list[str], cache_dir: str = "data/raw/cache") ->
 
 def clean_prices(prices: pd.DataFrame, volume: pd.DataFrame, spy: pd.DataFrame,
                  universe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Turn the holey downloaded tables into a perfect rectangle of numbers.
-
-    Downloaded data has holes (NaN) and junk days; everything downstream
-    does math on this table and cannot handle holes. This function
-    removes the holes in a fixed, documented way and records what it
-    threw out. Returns (prices, volume, spy, universe).
-    """
+    """Drop NaN-heavy tickers and incomplete days to make a full rectangle.
+    Returns (prices, volume, spy, universe)."""
     # 1. trading calendar = SPY's calendar
     trading_days = prices.index[prices.index.isin(spy.index)]
     prices = prices.loc[trading_days]
@@ -112,11 +102,7 @@ def clean_prices(prices: pd.DataFrame, volume: pd.DataFrame, spy: pd.DataFrame,
 
 
 def compute_returns(prices: pd.DataFrame) -> pd.DataFrame:
-    """Daily LOG returns: ln(p_t / p_{t-1}), one column per ticker.
-
-    Log, not simple, per config.LOG_RETURNS: log returns add up over
-    time, which the PCA math relies on. The first row is dropped.
-    """
+    """Daily LOG returns ln(p_t / p_{t-1}). First row dropped."""
 
     prices_shifted_forward = prices.shift(1)
     returns = np.log(prices / prices_shifted_forward)
@@ -125,17 +111,8 @@ def compute_returns(prices: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
-    """Build every raw/processed data artifact.
-
-    Two modes:
-        python -m src.data          read the existing cache instead of downloading.
-                                    Fails loudly if any cache file is
-                                    missing.
-        python -m src.data --pull   downloads data and refreshes the whole cache 
-                                    and writes LOG.md.
-                                   
-    Then clean data, compute returns and write everything in files.
-    """
+    """Build all data artifacts. `python -m src.data` reads the cache (fails if
+    missing); `--pull` downloads fresh and refreshes cache + LOG.md."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--pull", action="store_true")
     args = parser.parse_args()
