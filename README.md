@@ -12,7 +12,6 @@ money after trading fees.
 report/     the report (final_report.pdf) and its LaTeX source
 results/    every number and figure the report cites
 src/        the pipeline code
-tests/      35 tests
 ```
 
 ## Run it
@@ -20,7 +19,6 @@ tests/      35 tests
 ```
 conda env create -f environment.yml
 conda activate pair-trading
-pytest -q         # 35 tests, green before anything else
 make all          # raw prices -> results, everything except the test run
 make noise-test   # runs the pipeline on random data; must find nothing
 make test-run     # the held-out test years; we ran this once

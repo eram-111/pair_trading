@@ -1,4 +1,4 @@
-.PHONY: all data tracka trackb dataset models grid metrics noise-test test-run figures output test
+.PHONY: all data tracka trackb dataset models grid metrics noise-test test-run figures output
 
 data:            ## returns.parquet, prices.parquet, volume.parquet, spy.parquet, universe.csv
 	python -m src.data
@@ -39,6 +39,4 @@ output:
 	-cp results/control_*.json output/
 	-cp results/noise/PASS_FAIL.md output/
 	-cp results/frozen/taus.json output/
-test:
-	pytest -q
 all: data tracka trackb dataset models grid metrics noise-test output
