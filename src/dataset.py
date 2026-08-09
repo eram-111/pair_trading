@@ -1,4 +1,4 @@
-"""Build trigger rows, labels, splits, and model features."""
+"""Build trigger rows, labels, splits and model features"""
 
 import argparse
 
@@ -8,15 +8,15 @@ from src import config
 from src.contracts import SCHEMAS, read_parquet, write_parquet
 
 
-def require_columns(df: pd.DataFrame, cols: list[str], name: str) -> None:
-    """Raise if the table is missing any of these columns."""
-    for col in cols:
+def require_columns(df: pd.DataFrame, columns: list[str], name: str) -> None:
+    """Check that a table has all the columns it needs"""
+    for col in columns:
         if col not in df.columns:
             raise ValueError(f"{name} is missing column: {col}")
 
 
 def check_date_index(index: pd.DatetimeIndex, name: str) -> None:
-    """Raise unless this is a sorted, unique, non-empty date index."""
+    """Check that a date index is sorted, unique and not empty"""
     if not isinstance(index, pd.DatetimeIndex):
         raise TypeError(f"{name} needs a DatetimeIndex")
     if index.empty:
@@ -28,7 +28,7 @@ def check_date_index(index: pd.DatetimeIndex, name: str) -> None:
 
 
 def clean_triggers(triggers: pd.DataFrame) -> pd.DataFrame:
-    """Copy the trigger table and parse its dates."""
+    """Copy the trigger table and parse its dates"""
     df = triggers.copy()
     df["trigger_date"] = pd.to_datetime(df["trigger_date"])
     if df["trigger_date"].isna().any():
@@ -37,7 +37,7 @@ def clean_triggers(triggers: pd.DataFrame) -> pd.DataFrame:
 
 
 def get_pair_legs(pairs: pd.DataFrame, pair_id: str) -> tuple[str, str]:
-    """Look up the two stocks that make up a pair."""
+    """Look up the two stocks that make up a pair"""
     legs = pairs[pairs["pair_id"] == pair_id]
     if legs.empty:
         raise ValueError(f"pairs is missing the pair: {pair_id}")
@@ -48,10 +48,10 @@ def get_pair_legs(pairs: pd.DataFrame, pair_id: str) -> tuple[str, str]:
     return a_vals[0], b_vals[0]
 
 
-def combine_active_windows(pairs: pd.DataFrame,calendar: pd.DatetimeIndex,) -> pd.DataFrame:
-    """Merge pair windows that touch on back-to-back trading days into runs."""
+def combine_active_windows(pairs: pd.DataFrame,calendar: pd.DatetimeIndex) -> pd.DataFrame:
+    """Merge pair windows that touch on back to back trading days into runs"""
     needed = ["pair_id", "source", "active_from", "active_to"]
-    out_cols = ["pair_id", "source", "run_start", "run_end"]
+    result_cols = ["pair_id", "source", "run_start", "run_end"]
 
     if not isinstance(pairs, pd.DataFrame):
         raise TypeError("pairs must be a DataFrame")
@@ -63,7 +63,7 @@ def combine_active_windows(pairs: pd.DataFrame,calendar: pd.DatetimeIndex,) -> p
     df["active_to"] = pd.to_datetime(df["active_to"])
 
     if df.empty:
-        return pd.DataFrame(columns=out_cols)
+        return pd.DataFrame(columns=result_cols)
 
     for col in needed:
         if df[col].isna().any():
@@ -76,17 +76,17 @@ def combine_active_windows(pairs: pd.DataFrame,calendar: pd.DatetimeIndex,) -> p
 
     df = df.sort_values(["pair_id", "active_from"])
 
-    out = []
-    for pair_id, rows in df.groupby("pair_id"):
-        rows = rows.sort_values("active_from")
-        if rows["source"].nunique() != 1:
+    result_rows = []
+    for pair_id, group in df.groupby("pair_id"):
+        group = group.sort_values("active_from")
+        if group["source"].nunique() != 1:
             raise ValueError(f"pair {pair_id} has more than one source")
 
-        source = rows.iloc[0]["source"]
-        run_start = rows.iloc[0]["active_from"]
-        run_end = rows.iloc[0]["active_to"]
+        source = group.iloc[0]["source"]
+        run_start = group.iloc[0]["active_from"]
+        run_end = group.iloc[0]["active_to"]
 
-        for _, row in rows.iloc[1:].iterrows():
+        for _, row in group.iloc[1:].iterrows():
             next_start = row["active_from"]
             next_end = row["active_to"]
             if next_start <= run_end:
@@ -95,30 +95,26 @@ def combine_active_windows(pairs: pd.DataFrame,calendar: pd.DatetimeIndex,) -> p
             end_pos = calendar.get_loc(run_end)
             next_day = calendar[end_pos + 1]
 
-            # windows that touch on the next trading day are one run
             if next_start == next_day:
                 run_end = next_end
             else:
-                out.append({"pair_id": pair_id, "source": source,"run_start": run_start,
-                            "run_end": run_end})
+                result_rows.append({"pair_id": pair_id, "source": source,"run_start": run_start,
+                                    "run_end": run_end})
                 run_start = next_start
                 run_end = next_end
 
-        out.append({"pair_id": pair_id, "source": source, "run_start": run_start, 
-                    "run_end": run_end})
+        result_rows.append({"pair_id": pair_id, "source": source, "run_start": run_start, 
+                            "run_end": run_end})
 
-    runs = pd.DataFrame(out, columns=out_cols)
-    runs = runs.sort_values(["pair_id", "run_start"]).reset_index(drop=True)
-    return runs
+    result = pd.DataFrame(result_rows, columns=result_cols)
+    result = result.sort_values(["pair_id", "run_start"]).reset_index(drop=True)
+    return result
 
 
 def label_one_trigger(pair_zscores: pd.Series,trigger_date: pd.Timestamp,
-                      run_end: pd.Timestamp,horizon: int,reversion_frac: float,
+                      run_end: pd.Timestamp,horizon: int,reversion_frac: float
                       ) -> tuple[int, pd.Timestamp] | None:
-    """Label one trigger using the next `horizon` trading days.
-
-    Returns None when the full future window is not available.
-    """
+    """Label one trigger, or return None when the future window is incomplete"""
     if not isinstance(pair_zscores, pd.Series):
         raise TypeError("pair_zscores must be a Series")
     check_date_index(pair_zscores.index, "pair_zscores")
@@ -135,8 +131,8 @@ def label_one_trigger(pair_zscores: pd.Series,trigger_date: pd.Timestamp,
         raise ValueError("trigger_date is not in the z-score data")
 
     pos = pair_zscores.index.get_loc(trigger_date)
-    trig_z = pair_zscores.iloc[pos]
-    if pd.isna(trig_z):
+    trigger_z = pair_zscores.iloc[pos]
+    if pd.isna(trigger_z):
         raise ValueError("the z-score on the trigger date is missing")
 
     end_pos = pos + horizon
@@ -150,24 +146,18 @@ def label_one_trigger(pair_zscores: pd.Series,trigger_date: pd.Timestamp,
     if future.isna().any():
         return None
 
-    target = reversion_frac * abs(trig_z)
+    target = reversion_frac * abs(trigger_z)
     reverted = (future.abs() <= target).any()
     label = int(reverted)
     return label, pd.Timestamp(end_date)
 
 
-def detect_triggers(zscores: pd.DataFrame,pairs: pd.DataFrame,
-                    z_entry: float = config.TRIGGER_Z,horizon: int = config.LABEL_HORIZON,
-                    reversion_frac: float = config.REVERSION_FRACTION,) -> pd.DataFrame:
-    """Find fresh z-score crossings and label them.
-
-    A trigger fires when |z| goes from below z_entry to at or above it.
-    After a trigger the pair is turned off. It turns back on once the
-    horizon has passed and |z| has printed below z_entry again since the
-    horizon closed. A new trigger then needs a fresh crossing.
-    """
-    out_cols = ["trigger_id", "pair_id", "source", "trigger_date","z_trigger", "label", 
-                "horizon_end_date"]
+def detect_triggers(zscores: pd.DataFrame,pairs: pd.DataFrame,z_entry: float = config.TRIGGER_Z,
+                    horizon: int = config.LABEL_HORIZON,
+                    reversion_frac: float = config.REVERSION_FRACTION) -> pd.DataFrame:
+    """Find fresh z-score crossings and label them"""
+    result_cols = ["trigger_id", "pair_id", "source", "trigger_date","z_trigger", "label",
+                   "horizon_end_date"]
 
     if not isinstance(zscores, pd.DataFrame):
         raise TypeError("zscores must be a DataFrame")
@@ -205,7 +195,6 @@ def detect_triggers(zscores: pd.DataFrame,pairs: pd.DataFrame,
         last_horizon_end = None
         went_below = False
 
-        # start at 1 because a run's first day has no previous day
         for pos in range(1, len(run_z)):
             date = run_z.index[pos]
             prev_z = run_z.iloc[pos - 1]
@@ -232,7 +221,6 @@ def detect_triggers(zscores: pd.DataFrame,pairs: pd.DataFrame,
             if result is None:
                 dropped += 1
                 end_pos = pos + horizon
-                # if this horizon already reaches past the run, later ones do too
                 if end_pos >= len(run_z):
                     break
                 last_horizon_end = run_z.index[end_pos]
@@ -242,9 +230,9 @@ def detect_triggers(zscores: pd.DataFrame,pairs: pd.DataFrame,
             last_horizon_end = horizon_end
             found.append({"trigger_id": f"{pair_id}__{date:%Y%m%d}","pair_id": pair_id,
                           "source": source,"trigger_date": date,"z_trigger": float(cur_z),
-                          "label": label,"horizon_end_date": horizon_end,})
+                          "label": label,"horizon_end_date": horizon_end})
 
-    triggers = pd.DataFrame(found, columns=out_cols)
+    triggers = pd.DataFrame(found, columns=result_cols)
     triggers = triggers.astype({"trigger_id": "str", "pair_id": "str", "source": "str",
                                 "z_trigger": "float64", "label": "int8"})
     triggers["trigger_date"] = pd.to_datetime(triggers["trigger_date"])
@@ -256,8 +244,8 @@ def detect_triggers(zscores: pd.DataFrame,pairs: pd.DataFrame,
 
 
 def assign_split(trigger_dates: pd.Series,horizon_end_dates: pd.Series,
-                 calendar: pd.DatetimeIndex,) -> pd.Series:
-    """Give each trigger a split: train, val, test, purged, or embargo."""
+                 calendar: pd.DatetimeIndex) -> pd.Series:
+    """Give each trigger a split: train, val, test, purged or embargo"""
     if not isinstance(trigger_dates, pd.Series):
         raise TypeError("trigger_dates must be a Series")
     if not isinstance(horizon_end_dates, pd.Series):
@@ -289,7 +277,6 @@ def assign_split(trigger_dates: pd.Series,horizon_end_dates: pd.Series,
 
     split = pd.Series(index=trigger_dates.index, dtype="object", name="split")
 
-    # plain date ranges first
     split.loc[trigger_dates.between(train_start, train_end)] = "train"
     split.loc[trigger_dates.between(val_start, val_end)] = "val"
     split.loc[trigger_dates.between(test_start, test_end)] = "test"
@@ -300,53 +287,51 @@ def assign_split(trigger_dates: pd.Series,horizon_end_dates: pd.Series,
     val_days = calendar[(calendar >= val_start) & (calendar <= val_end)]
     test_days = calendar[(calendar >= test_start) & (calendar <= test_end)]
 
-    # purge labels that reach into the next split
     if len(val_days) > 0:
         split.loc[(split == "train") & (horizon_end_dates >= val_days[0])] = "purged"
     if len(test_days) > 0:
         split.loc[(split == "val") & (horizon_end_dates >= test_days[0])] = "purged"
 
-    # embargo the first trading days of val and test
     split.loc[trigger_dates.isin(val_days[: config.EMBARGO_DAYS])] = "embargo"
     split.loc[trigger_dates.isin(test_days[: config.EMBARGO_DAYS])] = "embargo"
 
     return split.astype("str")
 
 
-def calculate_spread_volatility(triggers: pd.DataFrame,spreads: pd.DataFrame,) -> pd.Series:
-    """Std of daily spread changes over the last 60 days at each trigger."""
+def calculate_spread_volatility(triggers: pd.DataFrame,spreads: pd.DataFrame) -> pd.Series:
+    """Calculate the 60 day volatility of daily spread changes at each trigger"""
     require_columns(triggers, ["pair_id", "trigger_date"], "triggers")
     check_date_index(spreads.index, "spreads")
 
     df = clean_triggers(triggers)
 
     diffs = spreads.diff()
-    roll_std = diffs.rolling(config.SPREAD_VOL_WINDOW, min_periods=30).std()
+    rolling_std = diffs.rolling(config.SPREAD_VOL_WINDOW, min_periods=30).std()
 
-    out = pd.Series(index=triggers.index, dtype="float64", name="f_spread_vol_60d")
+    result = pd.Series(index=triggers.index, dtype="float64", name="f_spread_vol_60d")
 
     for i, row in df.iterrows():
         pair_id = row["pair_id"]
         trigger_date = row["trigger_date"]
-        if pair_id not in roll_std.columns:
+        if pair_id not in rolling_std.columns:
             raise ValueError(f"spreads is missing pair column: {pair_id}")
-        if trigger_date not in roll_std.index:
+        if trigger_date not in rolling_std.index:
             raise ValueError(f"trigger date {trigger_date} is not in the spread calendar")
-        out.loc[i] = roll_std.loc[trigger_date, pair_id]
+        result.loc[i] = rolling_std.loc[trigger_date, pair_id]
 
-    return out
+    return result
 
 
 def calculate_residual_momentum(triggers: pd.DataFrame,residuals: pd.DataFrame,
-                                pairs: pd.DataFrame,) -> pd.Series:
-    """Signed five-day residual momentum at each trigger."""
+                                pairs: pd.DataFrame) -> pd.Series:
+    """Calculate the signed five day residual momentum at each trigger"""
     require_columns(triggers, ["pair_id", "trigger_date", "z_trigger"], "triggers")
     require_columns(pairs, ["pair_id", "stock_a", "stock_b"], "pairs")
     check_date_index(residuals.index, "residuals")
 
     df = clean_triggers(triggers)
 
-    out = pd.Series(index=triggers.index, dtype="float64", name="f_resid_mom_5d")
+    result = pd.Series(index=triggers.index, dtype="float64", name="f_resid_mom_5d")
 
     for i, row in df.iterrows():
         pair_id = row["pair_id"]
@@ -374,13 +359,13 @@ def calculate_residual_momentum(triggers: pd.DataFrame,residuals: pd.DataFrame,
             continue
 
         sign = 1 if z_trigger > 0 else -1
-        out.loc[i] = sign * diff.sum()
+        result.loc[i] = sign * diff.sum()
 
-    return out
+    return result
 
 
-def calculate_market_volatility(triggers: pd.DataFrame,factors: pd.DataFrame,) -> pd.Series:
-    """20-day PC1 volatility at each trigger."""
+def calculate_market_volatility(triggers: pd.DataFrame,factors: pd.DataFrame) -> pd.Series:
+    """Calculate the 20 day volatility of pc_1 at each trigger"""
     require_columns(triggers, ["trigger_date"], "triggers")
     require_columns(factors, ["pc_1"], "factors")
     check_date_index(factors.index, "factors")
@@ -389,32 +374,32 @@ def calculate_market_volatility(triggers: pd.DataFrame,factors: pd.DataFrame,) -
     if trigger_dates.isna().any():
         raise ValueError("trigger_date has missing values")
 
-    roll_std = factors["pc_1"].rolling(config.MKT_VOL_WINDOW, 
-                                       min_periods=config.MKT_VOL_WINDOW).std()
+    rolling_std = factors["pc_1"].rolling(config.MKT_VOL_WINDOW, 
+                                          min_periods=config.MKT_VOL_WINDOW).std()
 
-    out = pd.Series(index=triggers.index, dtype="float64", name="f_mkt_vol_20d")
+    result = pd.Series(index=triggers.index, dtype="float64", name="f_mkt_vol_20d")
 
     for i, trigger_date in trigger_dates.items():
         if trigger_date not in factors.index:
             raise ValueError(f"trigger date {trigger_date} is not in the factor calendar")
-        out.loc[i] = roll_std.loc[trigger_date]
+        result.loc[i] = rolling_std.loc[trigger_date]
 
-    return out
+    return result
 
 
 def calculate_relative_volume(triggers: pd.DataFrame,volume: pd.DataFrame,
-                              pairs: pd.DataFrame,) -> pd.Series:
-    """Each pair's volume compared with its own 20-day average."""
+                              pairs: pd.DataFrame) -> pd.Series:
+    """Compare each pair's volume with its own 20 day average"""
     require_columns(triggers, ["pair_id", "trigger_date"], "triggers")
     require_columns(pairs, ["pair_id", "stock_a", "stock_b"], "pairs")
     check_date_index(volume.index, "volume")
 
     df = clean_triggers(triggers)
 
-    roll_mean = volume.rolling(config.REL_VOLUME_WINDOW, 
-                               min_periods=config.REL_VOLUME_WINDOW).mean()
+    rolling_mean = volume.rolling(config.REL_VOLUME_WINDOW, 
+                                  min_periods=config.REL_VOLUME_WINDOW).mean()
 
-    out = pd.Series(index=triggers.index, dtype="float64", name="f_rel_volume_20d")
+    result = pd.Series(index=triggers.index, dtype="float64", name="f_rel_volume_20d")
 
     for i, row in df.iterrows():
         pair_id = row["pair_id"]
@@ -430,8 +415,8 @@ def calculate_relative_volume(triggers: pd.DataFrame,volume: pd.DataFrame,
 
         vol_a = volume.loc[trigger_date, stock_a]
         vol_b = volume.loc[trigger_date, stock_b]
-        avg_a = roll_mean.loc[trigger_date, stock_a]
-        avg_b = roll_mean.loc[trigger_date, stock_b]
+        avg_a = rolling_mean.loc[trigger_date, stock_a]
+        avg_b = rolling_mean.loc[trigger_date, stock_b]
 
         if pd.isna(vol_a) or pd.isna(vol_b):
             continue
@@ -440,14 +425,13 @@ def calculate_relative_volume(triggers: pd.DataFrame,volume: pd.DataFrame,
         if avg_a <= 0 or avg_b <= 0:
             continue
 
-        out.loc[i] = (vol_a / avg_a + vol_b / avg_b) / 2
+        result.loc[i] = (vol_a / avg_a + vol_b / avg_b) / 2
 
-    return out
+    return result
 
 
-def calculate_days_since_trigger(triggers: pd.DataFrame,calendar: pd.DatetimeIndex,
-                                 ) -> pd.Series:
-    """Trading days since the same pair's previous trigger."""
+def calculate_days_since_trigger(triggers: pd.DataFrame,calendar: pd.DatetimeIndex) -> pd.Series:
+    """Count the trading days since the same pair's previous trigger"""
     require_columns(triggers, ["pair_id", "trigger_date"], "triggers")
     check_date_index(calendar, "calendar")
 
@@ -457,32 +441,32 @@ def calculate_days_since_trigger(triggers: pd.DataFrame,calendar: pd.DatetimeInd
 
     max_days = 126
 
-    out = pd.Series(index=triggers.index, dtype="float64", name="f_days_since_trigger")
+    result = pd.Series(index=triggers.index, dtype="float64", name="f_days_since_trigger")
 
-    for pair_id, rows in df.groupby("pair_id"):
-        rows = rows.sort_values("trigger_date")
+    for pair_id, group in df.groupby("pair_id"):
+        group = group.sort_values("trigger_date")
         prev_pos = None
 
-        for i, row in rows.iterrows():
+        for i, row in group.iterrows():
             trigger_date = row["trigger_date"]
             if trigger_date not in calendar:
                 raise ValueError(f"trigger date {trigger_date} is not in the calendar")
 
             pos = calendar.get_loc(trigger_date)
             if prev_pos is None:
-                out.loc[i] = max_days
+                result.loc[i] = max_days
             else:
                 gap = pos - prev_pos
                 if gap <= 0:
                     raise ValueError(f"pair {pair_id} has duplicate or invalid trigger dates")
-                out.loc[i] = min(gap, max_days)
+                result.loc[i] = min(gap, max_days)
             prev_pos = pos
 
-    return out
+    return result
 
 
-def calculate_cluster_stability(triggers: pd.DataFrame,stability: pd.DataFrame,) -> pd.Series:
-    """Latest known co-clustered value (0/1) for each trigger."""
+def calculate_cluster_stability(triggers: pd.DataFrame,stability: pd.DataFrame) -> pd.Series:
+    """Find the latest known co-clustered value for each trigger"""
     require_columns(triggers, ["pair_id", "trigger_date"], "triggers")
     require_columns(stability, ["pair_id", "window_end", "co_clustered"], "stability")
 
@@ -499,12 +483,11 @@ def calculate_cluster_stability(triggers: pd.DataFrame,stability: pd.DataFrame,)
     if hist["co_clustered"].isna().any():
         raise ValueError("co_clustered has missing values")
     if not hist.empty and not pd.api.types.is_bool_dtype(hist["co_clustered"]):
-        raise TypeError("co_clustered must be Boolean")
+        raise TypeError("co_clustered must be boolean")
     if hist.duplicated(["pair_id", "window_end"]).any():
         raise ValueError("stability has duplicate pair and window_end rows")
 
-    # 0 = no evidence the pair persisted, the safe default
-    out = pd.Series(0.0, index=triggers.index, dtype="float64", name="f_cluster_stability")
+    result = pd.Series(0.0, index=triggers.index, dtype="float64", name="f_cluster_stability")
 
     for i, row in df.iterrows():
         past = hist[(hist["pair_id"] == row["pair_id"]) & (hist["window_end"] 
@@ -513,60 +496,56 @@ def calculate_cluster_stability(triggers: pd.DataFrame,stability: pd.DataFrame,)
             continue
         latest = past.sort_values("window_end").iloc[-1]
         if latest["co_clustered"]:
-            out.loc[i] = 1.0
+            result.loc[i] = 1.0
 
-    return out
+    return result
 
 
 def build_features(triggers: pd.DataFrame,*,zscores: pd.DataFrame,spreads: pd.DataFrame,
                    residuals: pd.DataFrame,factors: pd.DataFrame,volume: pd.DataFrame,
-                   stability: pd.DataFrame,pairs: pd.DataFrame,) -> pd.DataFrame:
-    """Add the seven raw features to a copy of the trigger table."""
+                   stability: pd.DataFrame,pairs: pd.DataFrame) -> pd.DataFrame:
+    """Add the seven raw features to a copy of the trigger table"""
     require_columns(triggers, ["z_trigger"], "triggers")
     if triggers["z_trigger"].isna().any():
         raise ValueError("z_trigger has missing values")
 
-    out = triggers.copy()
+    result = triggers.copy()
 
-    out["f_abs_z"] = out["z_trigger"].abs().astype("float64")
-    out["f_spread_vol_60d"] = calculate_spread_volatility(out, spreads)
-    out["f_resid_mom_5d"] = calculate_residual_momentum(out, residuals, pairs)
-    out["f_mkt_vol_20d"] = calculate_market_volatility(out, factors)
-    out["f_rel_volume_20d"] = calculate_relative_volume(out, volume, pairs)
-    out["f_days_since_trigger"] = calculate_days_since_trigger(out, zscores.index)
-    out["f_cluster_stability"] = calculate_cluster_stability(out, stability)
+    result["f_abs_z"] = result["z_trigger"].abs().astype("float64")
+    result["f_spread_vol_60d"] = calculate_spread_volatility(result, spreads)
+    result["f_resid_mom_5d"] = calculate_residual_momentum(result, residuals, pairs)
+    result["f_mkt_vol_20d"] = calculate_market_volatility(result, factors)
+    result["f_rel_volume_20d"] = calculate_relative_volume(result, volume, pairs)
+    result["f_days_since_trigger"] = calculate_days_since_trigger(result, zscores.index)
+    result["f_cluster_stability"] = calculate_cluster_stability(result, stability)
 
     for f in config.FEATURES:
-        out[f] = out[f].astype("float64")
+        result[f] = result[f].astype("float64")
 
-    # missing values get filled later, using train rows only
-    return out
+    return result
 
 
 def fill_missing_features(dataset: pd.DataFrame) -> pd.DataFrame:
-    """Fill missing features with medians taken from train rows only."""
+    """Fill missing features with medians taken from train rows only"""
     require_columns(dataset, ["split"] + list(config.FEATURES), "dataset")
 
-    out = dataset.copy()
-    train_rows = out["split"] == "train"
+    result = dataset.copy()
+    train_rows = result["split"] == "train"
     if not train_rows.any():
         raise ValueError("dataset has no training rows")
 
     for f in config.FEATURES:
-        median = out.loc[train_rows, f].median()
+        median = result.loc[train_rows, f].median()
         if pd.isna(median):
             raise ValueError(f"{f} has no usable training median")
-        out[f] = out[f].fillna(median).astype("float64")
+        result[f] = result[f].fillna(median).astype("float64")
 
-    return out
+    return result
 
 
 def assemble_dataset(track: str) -> pd.DataFrame:
-    """Build, check and save the full trigger dataset for one track.
-
-    The same logic runs for every track — no special rules for Track B.
-    """
-    if track not in ("a", "b", "c"):
+    """Build, check and save the full trigger dataset for one track"""
+    if track not in ("a", "b"):
         raise ValueError(f"unknown track: {track}")
 
     data_dir = config.DATA_DIR
@@ -589,7 +568,6 @@ def assemble_dataset(track: str) -> pd.DataFrame:
                              factors=factors, volume=volume,stability=stability, pairs=pairs)
     dataset = fill_missing_features(dataset)
 
-    # the contract fixes the column order and the dtypes
     wanted = SCHEMAS["triggers"].columns
     dataset = dataset[list(wanted)]
     for col, dtype in wanted.items():
@@ -607,8 +585,10 @@ def assemble_dataset(track: str) -> pd.DataFrame:
 
 
 def run_tracks(track_text: str) -> None:
-    """Build the dataset for each comma-separated track, e.g. "a" or "a,b"."""
-    tracks = [t.strip() for t in track_text.split(",")]
+    """Build the dataset for each track in a comma separated list"""
+    tracks = []
+    for track in track_text.split(","):
+        tracks.append(track.strip())
 
     for track in tracks:
         if track not in ("a", "b"):
@@ -622,8 +602,8 @@ def run_tracks(track_text: str) -> None:
 
 
 def main() -> None:
-    """Command-line entry point, e.g. python -m src.dataset_v2 --tracks a,b."""
-    parser = argparse.ArgumentParser(description="Build the trigger datasets.")
+    """Run the dataset build from the command line"""
+    parser = argparse.ArgumentParser(description="Build the trigger datasets")
     parser.add_argument("--tracks", default="a,b", help="comma-separated tracks")
     args = parser.parse_args()
     run_tracks(args.tracks)
