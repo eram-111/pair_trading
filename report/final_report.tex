@@ -30,11 +30,12 @@
 \renewcommand{\textfraction}{0.06}
 \renewcommand{\floatpagefraction}{0.75}
 
-\title{\vspace{-1.6em}\textbf{Can Machine Learning Help a Stock-Trading Strategy?}\\
-\large Testing 8 versions of ``pairs trading'' on 10 years of real market data}
+\title{\vspace{-1.6em}\textbf{Stocks of a Sector Rise Together: Pairs Trading With a Learned Betting Rule}\\
 
-\author{[Name 1] \quad [Name 2] \quad [Name 3] \\
-\normalsize CSC311 Summer 2026 Final Project (Option 2)\\
+\author{[Alex Bachynsky] \quad [Golam Eram] \quad [Jaskaran Narula] \\
+\normalsize University of Toronto\\
+\normalsize CSC311: Introduction to Machine Learning\\
+\normalsize Dr. Amanjit Singh\\
 \normalsize Code: \url{https://github.com/eram-111/pair_trading}}
 \date{}
 
@@ -45,10 +46,10 @@
 \noindent
 Some stocks normally move together. When two drift apart, a classic strategy bets
 the gap will close. The hard part is knowing \emph{which} gaps are worth betting
-on --- a machine-learning problem: predict whether a gap will close, then trade
-only when confident. We built 8 versions --- 2 ways of choosing pairs $\times$ 4
-ways of deciding to trade --- and tested all of them identically on 10 years of
-real prices. The models learn something real: on data they had never seen they
+on, a machine-learning problem: predict whether a gap will close, then trade
+only when confident. We built 8 versions: 2 ways of choosing pairs $\times$ 4
+ways of deciding to trade, and tested all of them identically on 10 years of
+real market history. The models learn something real: on data they had never seen they
 rank opportunities better than guessing. But none makes money after fees, because
 the edge is worth about 39 cents per \$100 traded and the fees cost 40. Two
 findings surprised us more than the returns did: a good accuracy score makes our
@@ -58,7 +59,7 @@ development was among the worst on the final test.
 
 \section{Introduction}
 
-Chevron and Exxon are both oil companies. When oil prices move, both stocks
+  Chevron and Exxon are both oil companies. When oil prices move, both stocks
 usually move the same way. So if Chevron jumps 3\% one week and Exxon does not
 move at all, something unusual has happened. Either there is real news about one
 company, or the gap is just noise and the two will drift back together.
@@ -525,9 +526,9 @@ and a result that looks strong on a few hundred examples can reverse on the next
 few hundred. All our code is public.
 
 \bigskip
-\noindent\textbf{Contributions.} [Name 1]: literature review, report writing,
-results analysis. [Name 2]: data pipeline, features, Track~B fundamentals, E1.
-[Name 3]: pair-forming pipeline, trade simulator, evaluation code (metrics,
+\noindent\textbf{Contributions.} [Alex Bachynsky]: literature review, report writing,
+results analysis. [Jaskaran Narula]: data pipeline, features, Track~B fundamentals, E1.
+[Golam Eram]: pair-forming pipeline, trade simulator, evaluation code (metrics,
 controls, fake-data test), E2 and E3.
 
 \smallskip
