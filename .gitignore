@@ -12,6 +12,7 @@ project.pdf
 
 report/*
 !report/final_report.tex
+report/final_report.pdf
 
 results/*
 !results/final/

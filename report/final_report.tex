@@ -30,13 +30,13 @@
 \renewcommand{\textfraction}{0.06}
 \renewcommand{\floatpagefraction}{0.75}
 
-\title{\vspace{-1.6em}\textbf{Stocks of a Sector Rise Together: Pairs Trading With a Learned Betting Rule}\\
+\title{\vspace{-1.6em}\textbf{Stocks of a Sector Rise Together:\\
+Pairs Trading With a Learned Betting Rule}}
 
-\author{[Alex Bachynsky] \quad [Golam Eram] \quad [Jaskaran Narula] \\
+\author{Alex Bachynsky \quad Golam Eram \quad Jaskaran Narula \\
 \normalsize University of Toronto\\
 \normalsize CSC311: Introduction to Machine Learning\\
-\normalsize Dr. Amanjit Singh\\
-\normalsize Code: \url{https://github.com/eram-111/pair_trading}}
+\normalsize Dr. Amanjit Singh}
 \date{}
 
 \begin{document}
@@ -75,7 +75,8 @@ in 4 does. So the interesting question is \textbf{``when a gap opens, is this on
 worth trading?''} That is a prediction problem, which is what machine learning is
 for. This report asks whether adding machine learning actually helps. To answer
 fairly we built 8 versions differing in only two ways, ran all 8 through identical
-code, looked at the test data exactly once, and put everything online.
+code, and looked at the test data exactly once. Our submitted code regenerates
+every number in this report from the raw prices with one command.
 
 \begin{table}[!ht]
 \small
@@ -523,12 +524,12 @@ because the edge is about 39 basis points and trading costs 40. The lessons we
 valued most were not about trading: a model can be ``70\% accurate'' and still be
 worse than doing nothing, a strategy can look skilful when it is only being lazy,
 and a result that looks strong on a few hundred examples can reverse on the next
-few hundred. All our code is public.
+few hundred. Our submitted code reproduces all of it.
 
 \bigskip
-\noindent\textbf{Contributions.} [Alex Bachynsky]: literature review, report writing,
-results analysis. [Jaskaran Narula]: data pipeline, features, Track~B fundamentals, E1.
-[Golam Eram]: pair-forming pipeline, trade simulator, evaluation code (metrics,
+\noindent\textbf{Contributions.} Alex Bachynsky: literature review, report writing,
+results analysis. Jaskaran Narula: data pipeline, features, Track~B fundamentals, E1.
+Golam Eram: pair-forming pipeline, trade simulator, evaluation code (metrics,
 controls, fake-data test), E2 and E3.
 
 \smallskip
