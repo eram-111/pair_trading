@@ -316,16 +316,27 @@ def cost_sweep_figure(tracks: list, models: list, split: str) -> None:
 
 # ------------------------- the report battery ------------------------------
 
+def decision_accuracy(decisions: pd.DataFrame, label_by_trigger_id: pd.Series) -> float:
+    """Share of triggers the strategy called right: it traded and the gap
+    closed, or it skipped and the gap did not. Works for every model,
+    including e0 (which always trades)."""
+    labels = label_by_trigger_id.loc[decisions["trigger_id"]].values
+    gap_closed = labels == 1
+    correct_mask = decisions["enter"].values == gap_closed
+    return float(correct_mask.mean())
+
+
 def _money_columns(trades: pd.DataFrame) -> dict:
-    """The trading half of one report row: n_trades, hit_rate, mean net + CI.
-    A cell with no trades gets NaN money numbers."""
+    """The trading half of one report row: n_trades, hit_rate, mean gross
+    (the no-cost return) and mean net + CI. No trades gets NaN money."""
     if len(trades) == 0:
-        return {"n_trades": 0, "hit_rate": float("nan"), "mean_net": float("nan"),
-                "ci_low": float("nan"), "ci_high": float("nan")}
+        return {"n_trades": 0, "hit_rate": float("nan"), "mean_gross": float("nan"),
+                "mean_net": float("nan"), "ci_low": float("nan"), "ci_high": float("nan")}
 
     net = trades[f"net_ret_{config.HEADLINE_COST_BPS}bps"]
     mean_net, ci_low, ci_high = bootstrap_mean_ci(net)
     return {"n_trades": len(trades), "hit_rate": float((net > 0).mean()),
+            "mean_gross": float(trades["gross_ret"].mean()),
             "mean_net": mean_net, "ci_low": ci_low, "ci_high": ci_high}
 
 
@@ -375,7 +386,8 @@ def report_numbers(tracks: list, models: list, split: str) -> pd.DataFrame:
             trades = read_parquet(trades_file)
             decisions = read_parquet(decisions_file)
 
-            row = {"track": track, "model": model_name, "split": split}
+            row = {"track": track, "model": model_name, "split": split,
+                   "accuracy": decision_accuracy(decisions, label_by_trigger_id)}
             row.update(_money_columns(trades))
             row.update(_classification_columns(decisions, label_by_trigger_id,
                                                taus.get(f"{model_name}_{track}")))

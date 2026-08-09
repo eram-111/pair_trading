@@ -72,7 +72,7 @@ EMBARGO_DAYS: int = 10          # further trading days dropped after each bounda
 # NOTE: tau lives in results/frozen/taus.json (sole authority, written by each
 # model's owner via the one pre-registered rule) — deliberately NOT in this
 # file, so config can never disagree with what the runner actually reads.
-TAU_RULE: str = "see-DECISIONS.md"   # the one pre-registered rule, recorded there; never touched on test
+TAU_RULE: str = "see-README.md"   # the one pre-registered rule, recorded there; never touched on test
 E3_HIDDEN: tuple[int, ...] = (8, 16)   # hidden-size grid tried in E3's tune
 TORCH_DEVICE: str = "cpu"            # NEVER autodetect cuda — reproducibility requires same-device compute everywhere
 

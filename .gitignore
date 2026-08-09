@@ -1,18 +1,37 @@
+# python
 __pycache__/
 *.pyc
 .pytest_cache/
 .ipynb_checkpoints/
+
+# editors / OS / tooling
 .DS_Store
-.vscode
-*.pdf
+.vscode/
+.claude/
+
+# not ours to redistribute, and scratch notes
+project.pdf
 sync.txt
 dataset_old.py
-scripts/convert_bloomberg.py
 
-# results are regenerable; only the frozen finals are committed
-results/*
-!results/final/
-!results/figures/
-results/figures/*
-!results/figures/final/
-output/
+# helper scripts that only regenerate figures; the figures themselves
+# are committed under results/figures/
+scripts/
+
+# LaTeX build artifacts (final_report.tex and final_report.pdf ARE committed)
+report/*.aux
+report/*.log
+report/*.out
+report/*.synctex.gz
+
+# derived data: regenerate with `make all` from the committed raw cache.
+# results/ is committed instead, so nobody has to rerun the pipeline to
+# read the numbers the report cites.
+data/processed/
+data/clusters/
+data/pairs/
+data/spreads/
+data/datasets/
+data/synth/
+data/raw/*.parquet
+data/raw/universe.csv

@@ -11,6 +11,7 @@ class E2(EntryModel):
     def __init__(self):
         super().__init__("e2")
         self.prior_1 = None
+        self.empirical_prior_1 = None
         self.mean_0 = None
         self.mean_1 = None
         self.inf_cov = None
@@ -24,7 +25,9 @@ class E2(EntryModel):
         rows_0 = X[y == 0]
         assert len(rows_1) > 0 and len(rows_0) > 0, "training labels must contain both classes"
 
-        self.prior_1 = len(rows_1) / len(X)
+        self.empirical_prior_1 = len(rows_1) / len(X)
+        self.prior_1 = 0.5
+
         self.mean_1 = rows_1.mean(axis=0)
         self.mean_0 = rows_0.mean(axis=0)
 
@@ -58,4 +61,4 @@ class E2(EntryModel):
         return {}
 
     def get_params_report(self) -> dict:
-        return {"prior_1": float(self.prior_1)}
+        return {"prior_1": float(self.prior_1), "empirical_prior_1": float(self.empirical_prior_1)}

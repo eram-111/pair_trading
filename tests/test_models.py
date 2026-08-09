@@ -93,7 +93,7 @@ def test_e2_matches_sklearn_lda():
     ours = model.predict_proba(X)
 
     X_scaled = model.scaler.transform(X[list(config.FEATURES)])
-    lda = LinearDiscriminantAnalysis()
+    lda = LinearDiscriminantAnalysis(priors=[0.5, 0.5])  # e2 uses balanced priors
     lda.fit(X_scaled, y)
     theirs = lda.predict_proba(X_scaled)[:, 1]
 
