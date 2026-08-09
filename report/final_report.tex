@@ -43,13 +43,13 @@ Pairs Trading With a Learned Betting Rule}}
 
 \begin{abstract}
 \noindent
-Some stocks normally move together. When two drift apart, a classic strategy bets
+Some stocks normally move together. However, when they drift apart, "Staistical Arbitrage" bets
 the gap will close. The hard part is knowing \emph{which} gaps are worth betting
 on, a machine-learning problem: predict whether a gap will close, then trade
-only when confident. We built 8 versions: 2 ways of choosing pairs $\times$ 4
+only when confident. We explored 8 different approaches to this problem: 2 ways of choosing pairs $\times$ 4
 ways of deciding to trade, and tested all of them identically on 10 years of
-real market history. The models learn something real: on data they had never seen they
-rank opportunities better than guessing. But none makes money after fees, because
+real market history. Our models reflect real learning, on data they had never seen they
+rank opportunities better than guessing. However, none make money after fees, because
 the edge is worth about 39 cents per \$100 traded and the fees cost 40. Two
 findings surprised us more than the returns did: a good accuracy score makes our
 models look useful when they are not, and the version that looked best during
@@ -63,17 +63,15 @@ usually move the same way. So if Chevron jumps 3\% one week and Exxon does not
 move at all, something unusual has happened. Either there is real news about one
 company, or the gap is just noise and the two will drift back together.
 
-\emph{Pairs trading} is a strategy that bets on the second story. When the gap
-opens, you buy the one that fell behind and bet against the one that ran ahead.
-If they come back together, you win on both sides. If they do not, you lose. It
-is one of the oldest computer-driven trading strategies and it used to work well
+"Statistical arbitrage," or "Pairs trading," is a strategy that bets on the latter. When a gap
+opens, you buy the stock that fell behind and bet against the one that ran ahead.
+If they come back together, you win on both sides. If they dont, you lose.
 \cite{gatev2006}.
 
-The problem is that most gaps do \textbf{not} close --- in our data only about 1
-in 4 does. So the interesting question is \textbf{``when a gap opens, is this one
+The problem is that most gaps do not close; in our data only about 1
+in 4 does. The question, therefore, that our report seeks to answer is: \textbf{``when a gap opens, is this one
 worth trading?''} That is a prediction problem, which is what machine learning is
-for. This report asks whether adding machine learning actually helps. To answer
-fairly we built 8 versions differing in only two ways, ran all 8 through identical
+for. In our analysis we explored 8 different approaches to this problem in two ways, ran all 8 through identical
 code, and looked at the test data exactly once. Our submitted code regenerates
 every number in this report from the raw prices with one command.
 
@@ -95,7 +93,7 @@ valuation. Price history is not used. \\
 \midrule
 \multicolumn{2}{@{}l}{\textbf{The four ways of deciding to trade}} \\
 \midrule
-E0 & Trades every gap. No learning at all --- our baseline. \\
+E0 & Trades every gap. No learning at all, this is our baseline. \\
 E1 & Logistic regression: draws one straight dividing line between gaps that
 close and gaps that do not. \\
 E2 & Gaussian discriminant analysis: learns what each outcome typically looks
@@ -121,22 +119,22 @@ means it survives the fees we assume. \\
 
 \section{What other people have done}
 
-Gatev and co-authors \cite{gatev2006} wrote the paper that made this strategy
+Gatev et al. \cite{gatev2006} wrote the paper that made this strategy
 famous: pick pairs whose prices had historically tracked each other, trade when
-they drift apart, and close when they re-converge. It made real money on
-1962--2002 US stocks. Later researchers found those profits shrinking as the
+they drift apart, and close when they re-converge. It made was able to reliably produce significant gains on
+US market history from 1962--2002. Later researchers found those profits shrinking as the
 strategy became crowded and fees ate the rest.
 
 Two papers improved how pairs are chosen, and they are the two tracks we compare.
 Avellaneda and Lee \cite{avellaneda2010} first strip out the market-wide
 movements that push every stock at once, and look only at what is left for each
-stock (our Track~A). Zhang and co-authors \cite{zhang2014} instead group
-companies by what the \emph{business} looks like --- profitability, growth,
-valuation --- rather than by price history (our Track~B); we also borrow their
+stock (our Track~A). Zhang et al. \cite{zhang2014} instead group
+companies by company features, such as profitability, or growth,
+valuation, rather than merely price history (our Track~B); we also borrow their
 rules for turning groups into pairs. More recent work adds machine learning:
 clustering for choosing pairs \cite{sarmento2020, rotondi2024} and classifiers
 for choosing when to enter \cite{ekinci2025}. We are not proposing a new method.
-We are trying to measure honestly whether the machine-learning part helps, by
+However, what our report aims to measure whether machine-learning provides a significant advantage, by
 holding everything else fixed and adding a control experiment (Section~6.3) that
 this literature largely omits.
 
@@ -150,9 +148,7 @@ date and discard examples near the boundaries.
 \subsection{The pipeline}
 
 Figure~\ref{fig:pipeline} shows the whole system: prices go in at the left and
-trading results come out at the end. The grey boxes are shared by all 8 versions
---- same code, same settings, same random seed --- and only the white boxes
-change. So if one version beats another, it is because of the thing we changed,
+trading results come out at the end. The grey boxes are shared by all 8 versions, same code, same settings, same random seed, and only the white boxes change. So if one version beats another, it is because of the thing we changed,
 not because one got a better backtest.
 
 \begin{figure}[!ht]
@@ -196,14 +192,14 @@ versions; only the white boxes --- how pairs are chosen, and which model decides
 
 Figure~\ref{fig:method} shows a real trade from our test data. Two energy stocks
 drift apart (top). We measure that gap as a $z$-score (bottom): when it crosses
-2, the gap is unusually large and we call that a \textbf{trigger}. We wait one
+2, the gap is unusually large and we call that a trigger. We wait one
 day (so we could only ever trade on information we already had), then bet on the
 gap closing. We close the trade when the gap shrinks, or after 5 days if nothing
 happens.
 
-Every trigger becomes one training example. The \textbf{answer} to predict is:
+Every trigger becomes one training example. The answer to predict is:
 did the gap shrink by half within 5 days? (Yes about 24\% of the time.) The
-\textbf{clues} are 7 numbers: how big the gap is, how jumpy the pair usually is,
+clues are 7 numbers: how big the gap is, how jumpy the pair usually is,
 whether the gap is still widening, how volatile the market is, trading volume,
 days since this pair last triggered, and how stable the pairing is.
 
@@ -228,10 +224,8 @@ Track~A, 1{,}122 on Track~B), \textbf{2021--2022} to choose settings (345 / 378)
 and \textbf{2023--2024} to test (356 / 324); about 1\% of examples sitting on the
 boundaries are discarded, because a trade starting just before a cut-off would
 have its outcome decided on the other side. Roughly a quarter of gaps close in
-every period --- the number any model must beat. We looked at the test years
-exactly once, at the very end, after everything was locked; if you keep checking
-your test data and adjusting, you end up fooling yourself and the score stops
-meaning anything.
+every period, the number our model must beat. We looked at the test years
+exactly once, at the very end, after everything was locked.
 
 Trading is not free. Every trade pays a fee on both stocks, going in and coming
 out. We assume 10 basis points per leg, which totals \textbf{40 basis points
@@ -295,8 +289,8 @@ B & E3 (neural net) & 42\% & $+23.7$ & $-16.3$ \ $[-119, +85]$ & $+5.9$ & \textb
 
 \textbf{Track A: pairs that move alike.} Following Avellaneda and Lee
 \cite{avellaneda2010}, each day we take the last year of returns and use PCA to
-find the few patterns explaining most of how all 40 stocks move together --- the
-market and a few sector-like effects --- and subtract them out. What remains for
+find the few patterns explaining most of how all 40 stocks move together, the
+market and a few sector-like effects, and subtract them out. What remains for
 each stock is its own private movement, and that is what we track:
 \begin{equation}
 \varepsilon_{i,t} = r_{i,t} - \Big(\alpha_i + \textstyle\sum_{k=1}^{m}\beta_{ik} f_{k,t}\Big)
@@ -307,22 +301,21 @@ choosing the number of groups by silhouette score. This gives 120 regroupings an
 cell in the study (E1, essentially breakeven) and the worst (E3), so on the same
 pairs the choice of model swung the result by more than 80 bps per trade.
 
-\textbf{Track B: pairs that look alike.} Following Zhang and co-authors
-\cite{zhang2014}, each quarter we take 19 measurements per company, clean them
-(drop sparse columns, fill gaps with the median, standardise within the quarter),
+\textbf{Track B: pairs that look alike.} Following Zhang et al.
+\cite{zhang2014}, each quarter we take 19 measurements per company, clean them,
 compress them with PCA, and group companies that resemble each other as
-\emph{businesses}. Price history plays no part. This gives 39 regroupings and 242
+businesses. Price history plays no part. This gives 39 regroupings and 242
 pairs. Both tracks then trade the same underlying gaps, so only the grouping
 differs. \emph{Comparing the models here:} Track~B gave the best predictions in
 the study (E3, the only AUC whose range excludes chance) and the only model to
-clearly beat its random-strategy control --- but its two linear models were the
+clearly beat its random-strategy control, but its two linear models were the
 worst money-losers overall.
 
 \section{Four ways to decide when to trade}
 
 Table~\ref{tab:names} says what each model is; here is how each one works and how
 it fared on the two tracks. All four see the same 7 clues and output a number
-between 0 and 1 --- how likely this gap is to close --- and trade when that
+between 0 and 1, how likely this gap is to close, and trade when that
 number clears a cutoff $\tau$ we fixed by a rule set in advance.
 
 \textbf{E0} learns nothing, so it is the bar the others must clear. It lost
@@ -332,19 +325,18 @@ was worse than doing nothing on both tracks.
 \textbf{E1} fits $\hat p = \sigma(w^\top x + b)$ with an L2 penalty and class
 weights that correct for the 24\% base rate, choosing the penalty strength by
 validation AUC. It is the natural first model here: with 7 clues and about 1{,}100
-training examples, anything more flexible risks memorising. \emph{Across tracks}
+training examples, anything more flexible risks memorising. Across tracks,
 it gave the best cell in the study on Track~A and one of the two worst on
-Track~B --- the same model, opposite verdicts.
+Track~B.
 
 \textbf{E2} asks the question backwards. Rather than learning a boundary, it
 assumes gaps that close and gaps that do not each form a bell-shaped cloud,
 learns both clouds, and applies Bayes' rule. Assuming the clouds share a shape
-makes its answer a straight line again --- so it should behave like E1, and it
-does (Section~6.4). \emph{Across tracks} it tracks E1 almost exactly on both.
+makes its answer a straight line again, so it should behave like E1 (Section~6.4). Across tracks it tracks E1 almost exactly on both.
 
-\textbf{E3} is a small network: 7 inputs, one hidden layer of 8 or 16 units, one
+\textbf{E3} is a small neural network: 7 inputs, one hidden layer of 8 or 16 units, one
 output, trained with early stopping. It is the only model that can bend its
-boundary. \emph{Across tracks} it inverts E1's pattern --- worst on Track~A, best
+boundary. Across tracks it inverts E1's pattern, worst on Track~A, best
 on Track~B, where it produced the study's only convincing evidence of skill. That
 flip, from the same model on the same 7 clues, is the clearest sign that with this
 little data the choice of model and the choice of pairs interact in ways we cannot
@@ -355,19 +347,18 @@ separate.
 \subsection{Nobody made money}
 
 The two results tables ask different questions --- Table~\ref{tab:predict}
-whether a model \emph{knew} anything, Table~\ref{tab:money} whether that
-knowledge was \emph{worth} anything --- and they get different answers, which is
+whether a model knew anything, Table~\ref{tab:money} whether that
+knowledge was worth anything, and they get different answers, which is
 the heart of this report.
 
-Start with the money. After fees, all 8 versions lost. The best, Track~A with
-logistic regression, lost $1.3$ bps per trade --- close enough to zero that we
+Starting with the returns, after fees, all 8 versions lost. The best, Track~A with
+logistic regression, lost $1.3$ bps per trade, close enough to zero that we
 cannot tell it apart from breaking even. Every 95\% range in that column contains
 zero except Track~B's E0 and E2, so for six of the eight we cannot even be
 confident they lost.
 
 The ``before fees'' column shows why. The best edge anyone found was $+38.7$ bps per
-trade. The fee is $40$ bps. That is the entire story of this project in two
-numbers: \textbf{the strategy earns about 39 cents per \$100 traded, and costs 40
+trade. The fee is $40$ bps. This is the somewhat disappointing result of our project in sum: \textbf{the strategy earns about 39 cents per \$100 traded, and costs 40
 cents to trade}. Three of the 8 versions had a positive edge before fees; none
 kept it afterwards.
 
@@ -380,12 +371,11 @@ we assume, and the other six never break even at any fee.
 \subsection{Accuracy is a trap here (and this surprised us)}
 
 The accuracy column of Table~\ref{tab:predict} looks like great news. Trading every gap is ``correct'' only
-21\% of the time, and our models are correct 62--73\%. That looks like a huge
-improvement.
+21\% of the time, and our models are correct 62--73\%.
 
-It is not. The last row of Table~\ref{tab:predict} shows a strategy that
-\textbf{never trades at all} is correct 79\% of the time --- better than every
-model we built --- while earning nothing. Most gaps do not close, so ``skip'' is
+That looks like a huge improvement, but in actuality It is not. The last row of Table~\ref{tab:predict} shows a strategy that
+\textbf{never trades at all} is correct 79\% of the time, better than every
+model we built, while earning nothing. Most gaps do not close, so ``skip'' is
 usually right, and any cautious model racks up a high score by skipping. Accuracy
 rewards caution, not usefulness.
 
@@ -394,20 +384,20 @@ answer occurs and only asks whether the model \emph{ranks} good opportunities
 above bad ones. On that measure all six learned cells score 0.543--0.577, which is
 genuinely better than the 0.5 of random guessing, and for Track~B's neural network
 the confidence interval $[0.505, 0.649]$ stays above 0.5. So the models did learn
-something --- accuracy just was not the right way to see it.
+something, accuracy just was not the right way to see it.
 
 \subsection{Trading less is not the same as choosing better}
 
 Every model trades far less than E0 (60--106 trades instead of 324--356). Since
 every trade costs money, trading less automatically improves results, even with
-no skill whatsoever. So how much of the improvement is skill?
+no skill whatsoever. 
 
-To find out we built 1{,}000 fake strategies per model. Each trades exactly as
+How much of the improvement is skill? To find out, we built 1{,}000 fake strategies per model. Each trades exactly as
 often as the real one, in the same months, but picks \emph{at random} which gaps
 to take. Figure~\ref{fig:controls} shows where the real model lands in that
 crowd; the middle means its choices were no better than random.
 
-Track~B's neural network lands at the 90th percentile --- better than 900 of
+Track~B's neural network lands at the 90th percentile, better than 900 of
 1{,}000 random imitators, the only strong evidence of real skill we found.
 Track~A's logistic regression lands at 76. But Track~A's neural network lands at
 11 and Track~B's linear models at 19 and 15, meaning they chose \emph{worse} than
@@ -426,8 +416,8 @@ than random.}
 
 \subsection{The two linear models are the same model}
 
-E1 and E2 come from different traditions --- one learns the boundary directly,
-the other learns what each group looks like and works backwards --- yet they agree
+E1 and E2 come from different angles, one learns the boundary directly,
+the other learns what each group looks like and works backwards, yet they agree
 almost everywhere: test AUC 0.546 vs 0.549 on Track~A, 0.558 vs 0.559 on Track~B,
 and development control ranks of 16 vs 17 and 89 vs 88.
 
@@ -444,8 +434,7 @@ comparison taught us more than anything else in the project.
 
 During development, Track~B looked like a clear winner: its logistic regression
 earned $+29.9$ bps per trade and its neural network $+24.3$, both profitable after
-fees, and both ranked 88--89 against their random controls. We were, briefly, very
-pleased.
+fees, and both ranked 88--89 against their random controls.
 
 On the test years, those same frozen models earned $-94.9$ and $-16.3$ bps, and
 the logistic regression's control rank collapsed from 89 to 19. Meanwhile Track~A's
@@ -453,9 +442,7 @@ logistic regression went the other way, from rank 16 up to 76.
 
 Nothing was broken: the models were locked before we read the test data and the
 code reproduces exactly. A few hundred trades is simply not enough to tell these
-strategies apart --- the differences we were admiring were noise. We report it
-prominently because it would have been easy to stop at development and write a
-more exciting, wrong report.
+strategies apart, the differences we were admiring were noise.
 
 \begin{table}[!ht]
 \centering
@@ -483,7 +470,7 @@ B & E3 & $+24.3$ & $-16.3$ & 75 & 90 \\
 
 Before concluding we checked the machinery itself: run on fake, randomly
 generated prices where profit is impossible, the whole system lost money ($-51$
-bps per trade) and no model beat a simple baseline --- so it is not secretly
+bps per trade) and no model beat a simple baseline, so it is not secretly
 peeking at the future. Four things stand out.
 
 \textbf{1. The fees are the whole problem.} Every model found a real but tiny
@@ -494,7 +481,7 @@ extra machine learning closes a gap that size; you would need cheaper trading.
 of the time and lose money, while doing nothing is right 79\% of the time.
 
 \textbf{3. Doing less looks like skill.} Filtering improves results automatically
-because trades cost money --- only the random-strategy comparison showed that
+because trades cost money, only the random-strategy comparison showed that
 most of our models had no real selecting ability.
 
 \textbf{4. Small tests lie.} The version that looked best in development was
@@ -507,7 +494,7 @@ Our biggest weakness is size: 40 stocks over 10 years leaves only about 350 test
 opportunities per track, which is the direct cause of the reversal in
 Section~6.5. A much larger universe would be the single most valuable extension.
 Our fee model is a flat charge, but real fees rise exactly when markets are
-volatile --- which is when our triggers fire --- so our results are, if anything,
+volatile,  which is when our triggers fire, so our results are
 optimistic. We fixed the entry and exit rules by hand rather than learning them,
 which other work treats as its own machine-learning problem \cite{ekinci2025}.
 And our confidence ranges assume trades are independent when they overlap in time
@@ -517,8 +504,8 @@ and repeat the same pairs, so the true ranges are wider than we report.
 
 We built 8 versions of a pairs-trading strategy differing in only two ways, ran
 them through identical code, and looked at the test data once. The machine
-learning worked a little --- every learned model ranked opportunities better than
-chance on data it had never seen, one convincingly --- but none made money,
+learning worked a little, every learned model ranked opportunities better than
+chance on data it had never seen, one convincingly, but none made money,
 because the edge is about 39 basis points and trading costs 40. The lessons we
 valued most were not about trading: a model can be ``70\% accurate'' and still be
 worse than doing nothing, a strategy can look skilful when it is only being lazy,
@@ -534,7 +521,7 @@ controls, fake-data test), E2 and E3.
 \smallskip
 \noindent\textbf{Note on E2.} E2 first used the true 24\% closing rate as its
 starting assumption, which pushed every probability below our cutoff so it never
-traded --- a mismatch with how E1 and E3 handle the same imbalance, not a flaw in
+traded, a mismatch with how E1 and E3 handle the same imbalance, not a flaw in
 the method. We caught this during development, fixed it so all four models are
 treated alike, and re-ran E2 afterwards.
 
