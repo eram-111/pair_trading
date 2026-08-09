@@ -5,9 +5,9 @@ data:            ## returns.parquet, prices.parquet, volume.parquet, spy.parquet
 	python -m src.make_synthetic
 data_pull:       ## downloads new data from yfinance, then works same as make data
 	python -m src.data --pull
-tracka: data     ## Steps 2-6, track a: factors -> clusters -> pairs -> z-scores, one module
+tracka: data    
 	python -m src.representation --track a
-trackb: data     ## Track B approach file, then the shared representation machinery
+trackb: data  
 	python -m src.characteristics
 	python -m src.representation --track b
 dataset: tracka trackb
@@ -19,20 +19,20 @@ models:          ## fit + tune + freeze each model x track: writes results/froze
 	python -m src.train --model e1 --track b
 	python -m src.train --model e2 --track b
 	python -m src.train --model e3 --track b
-grid:            ## E0..E3 x tracks on train+val only; evaluates what exists, rebuilds nothing
+grid:         
 	python -m src.experiments --tracks a,b --models e0,e1,e2,e3 --split trainval
-metrics:         ## produce + analyze the VAL split: cells, report table, controls, breakevens, all figures
+metrics:       
 	python -m src.experiments --tracks a,b --models e0,e1,e2,e3 --split val
 	python -m src.metrics --tracks a,b --split val
 	python -m src.analysis
-noise-test:      ## full pipeline on src/make_synthetic.py output; PASS/FAIL criteria
+noise-test:     
 	python -m src.noise_test
-test-run:        ## the ONE witnessed test-split run (soft freeze: discipline, not code)
+test-run:      
 	python -m src.experiments --tracks a,b --models e0,e1,e2,e3 --split test
-figures:         ## regenerate every table + figure from written results (run after test-run)
+figures:   
 	python -m src.metrics --tracks a,b --split test
 	python -m src.analysis
-output:          ## copy every report-ready artifact into output/ (a leading - ignores a missing group)
+output:       
 	mkdir -p output
 	-cp results/tables/*.csv output/
 	-cp results/figures/*.png output/
@@ -41,5 +41,4 @@ output:          ## copy every report-ready artifact into output/ (a leading - i
 	-cp results/frozen/taus.json output/
 test:
 	pytest -q
-# everything up to (but excluding) the one witnessed test run; run serially, never with -j
 all: data tracka trackb dataset models grid metrics noise-test output
