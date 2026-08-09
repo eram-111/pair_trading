@@ -20,12 +20,18 @@ tests/      35 tests
 ```
 conda env create -f environment.yml
 conda activate pair-trading
-pytest -q
-make all        # raw prices -> results, everything except the test run
+pytest -q         # 35 tests, green before anything else
+make all          # raw prices -> results, everything except the test run
+make noise-test   # runs the pipeline on random data; must find nothing
+make test-run     # the held-out test years; we ran this once
 ```
 
 Raw price data is committed, so nothing needs the network. Derived data is
 not committed because `make all` regenerates it exactly.
+
+Everything downstream of the raw prices is a deterministic function of them,
+`src/config.py`, and seed 311, so the same environment gives the same numbers.
+Run `make all` serially, not with `-j`.
 
 ## The 8 versions
 
